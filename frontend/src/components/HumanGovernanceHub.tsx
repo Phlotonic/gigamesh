@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ForkGenome, HumanHubData } from '../types';
+import { HelpTip } from './HelpTip';
 
 interface Props {
   data: HumanHubData;
@@ -51,7 +52,10 @@ export function HumanGovernanceHub({ data, forks, onVote, onSignQuorum, onExport
         {/* Cryptographic HITL Quorum Gate */}
         <div className="gm-panel">
           <div className="gm-panel-header">
-            <h2>Cryptographic HITL Quorum Gate</h2>
+            <h2 className="gm-heading-tip">
+              Cryptographic HITL Quorum Gate
+              <HelpTip term="hitlQuorum" />
+            </h2>
             <div className="gm-form-row">
               <label className="gm-muted" htmlFor="quorum-signer">Signer:</label>
               <select
@@ -111,7 +115,10 @@ export function HumanGovernanceHub({ data, forks, onVote, onSignQuorum, onExport
         {/* Collective Analyst Defense & Rule Compiler */}
         <div className="gm-panel">
           <div className="gm-panel-header">
-            <h2>Collective Analyst Defense & Rule Compiler</h2>
+            <h2 className="gm-heading-tip">
+              Collective Analyst Defense &amp; Rule Compiler
+              <HelpTip term="collectiveDefense" />
+            </h2>
             <span className="gm-tag champion">{data.rules.length} active rules</span>
           </div>
           <div className="gm-panel-body gm-list-stack">
@@ -180,7 +187,10 @@ export function HumanGovernanceHub({ data, forks, onVote, onSignQuorum, onExport
       <div className="gm-grid-equal">
         <div className="gm-panel">
           <div className="gm-panel-header">
-            <h2>Human-Identity & Delegation Risk Correlation</h2>
+            <h2 className="gm-heading-tip">
+              Human-Identity &amp; Delegation Risk Correlation
+              <HelpTip term="humanIdentityRisk" />
+            </h2>
           </div>
           <div className="gm-panel-body gm-table-wrap">
             <table className="gm-table">
@@ -219,7 +229,10 @@ export function HumanGovernanceHub({ data, forks, onVote, onSignQuorum, onExport
 
         <div className="gm-panel">
           <div className="gm-panel-header">
-            <h2>Federated Crowdsourced STIX 2.1 Exchange</h2>
+            <h2 className="gm-heading-tip">
+              Federated Crowdsourced STIX 2.1 Exchange
+              <HelpTip term="stixExchange" />
+            </h2>
             <button type="button" className="gm-btn gm-btn-primary" onClick={onExportStix}>
               Export Signed STIX 2.1 Bundle
             </button>

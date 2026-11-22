@@ -679,3 +679,105 @@ pre,
 .gm-finding-link:hover {
   text-decoration: underline;
 }
+
+/* Novice-Friendly Tooltips */
+.gm-tip-wrap {
+  display: inline-flex;
+  align-items: center;
+}
+
+.gm-tip-anchor {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+
+.gm-help-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-subtle);
+  color: var(--ink-secondary);
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.gm-help-icon:hover,
+.gm-help-icon:focus-visible,
+.gm-help-icon.pinned {
+  background: var(--accent-cobalt);
+  border-color: var(--accent-cobalt);
+  color: #ffffff;
+  outline: none;
+}
+
+.gm-heading-tip {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.gm-tooltip {
+  position: fixed;
+  z-index: 9999;
+  width: min(290px, calc(100vw - 24px));
+  padding: 11px 13px;
+  border-radius: 8px;
+  background: #1b1e23;
+  color: #f6f5f1;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 10px 28px rgba(20, 22, 25, 0.28), 0 2px 6px rgba(20, 22, 25, 0.16);
+  font-family: var(--font-sans);
+  font-size: 12.2px;
+  line-height: 1.48;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+  animation: gm-tip-fade 0.12s ease-out;
+}
+
+@keyframes gm-tip-fade {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.gm-tooltip-title {
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.gm-tooltip-body {
+  color: #e4e2dc;
+}
+
+.gm-tooltip-why {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  color: #b7e4cf;
+  font-size: 11.5px;
+}
+
+.gm-tooltip-why strong {
+  color: #dff5ea;
+}

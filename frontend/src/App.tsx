@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api';
 import { EmailTriagePanel } from './components/EmailTriagePanel';
+import { HelpTip } from './components/HelpTip';
 import { HumanGovernanceHub } from './components/HumanGovernanceHub';
 import { NeuralForkDag } from './components/NeuralForkDag';
 import { ProvenanceGraph } from './components/ProvenanceGraph';
@@ -188,39 +189,48 @@ export default function App() {
         </div>
 
         <div className="gm-header-controls">
-          <span className={`gm-status-chip ${integrity?.valid ? 'ok' : 'danger'}`}>
-            Merkle Repo: {integrity?.valid ? 'VERIFIED' : 'TAMPERED'} ({integrity?.total_git_commits ?? 0} commits)
-          </span>
-          <span className={`gm-status-chip ${overview?.autopilot_running ? 'ok' : 'warn'}`}>
-            Autopoiesis: {overview?.autopilot_running ? `PERPETUAL (${overview.autopilot_interval_sec}s)` : 'PAUSED'} · Gen #{overview?.generation_counter ?? 0}
-          </span>
-          <button
-            id="chip-threat-crawler"
-            type="button"
-            className={`gm-status-chip ${crawlerStatus?.enabled ? 'ok' : 'warn'}`}
-            style={{ cursor: 'pointer' }}
-            onClick={() => setTab('crawler')}
-            title="Open Global Threat Intelligence Crawler"
-          >
-            Threat Crawler: {crawlerStatus?.enabled ? 'ON' : 'OFF'} ({crawlerStatus?.total_findings ?? 0} intel)
-          </button>
-          <button
-            id="btn-toggle-autopilot"
-            type="button"
-            className="gm-btn"
-            onClick={handleToggleAutopilot}
-          >
-            {overview?.autopilot_running ? 'Pause Perpetual Loop' : 'Resume Perpetual Loop'}
-          </button>
-          <button
-            id="btn-step-evolution"
-            type="button"
-            className="gm-btn gm-btn-primary"
-            disabled={busyAction !== null}
-            onClick={handleStepEvolution}
-          >
-            {busyAction === 'evolving' ? 'Benchmarking Forks…' : 'Evolve Next Generation'}
-          </button>
+          <HelpTip term="merkleRepo">
+            <span className={`gm-status-chip ${integrity?.valid ? 'ok' : 'danger'}`}>
+              Merkle Repo: {integrity?.valid ? 'VERIFIED' : 'TAMPERED'} ({integrity?.total_git_commits ?? 0} commits)
+            </span>
+          </HelpTip>
+          <HelpTip term="autopoiesis">
+            <span className={`gm-status-chip ${overview?.autopilot_running ? 'ok' : 'warn'}`}>
+              Autopoiesis: {overview?.autopilot_running ? `PERPETUAL (${overview.autopilot_interval_sec}s)` : 'PAUSED'} · Gen #{overview?.generation_counter ?? 0}
+            </span>
+          </HelpTip>
+          <HelpTip term="threatCrawler">
+            <button
+              id="chip-threat-crawler"
+              type="button"
+              className={`gm-status-chip ${crawlerStatus?.enabled ? 'ok' : 'warn'}`}
+              style={{ cursor: 'pointer' }}
+              onClick={() => setTab('crawler')}
+            >
+              Threat Crawler: {crawlerStatus?.enabled ? 'ON' : 'OFF'} ({crawlerStatus?.total_findings ?? 0} intel)
+            </button>
+          </HelpTip>
+          <HelpTip term="toggleAutopilot">
+            <button
+              id="btn-toggle-autopilot"
+              type="button"
+              className="gm-btn"
+              onClick={handleToggleAutopilot}
+            >
+              {overview?.autopilot_running ? 'Pause Perpetual Loop' : 'Resume Perpetual Loop'}
+            </button>
+          </HelpTip>
+          <HelpTip term="stepEvolution">
+            <button
+              id="btn-step-evolution"
+              type="button"
+              className="gm-btn gm-btn-primary"
+              disabled={busyAction !== null}
+              onClick={handleStepEvolution}
+            >
+              {busyAction === 'evolving' ? 'Benchmarking Forks…' : 'Evolve Next Generation'}
+            </button>
+          </HelpTip>
         </div>
       </header>
 
@@ -252,26 +262,38 @@ export default function App() {
         {/* Executive Telemetry Strip */}
         <section className="gm-kpi-strip" aria-label="System Telemetry">
           <div className="gm-kpi">
-            <div className="gm-kpi-label">Surviving Forks</div>
+            <div className="gm-kpi-label gm-heading-tip">
+              Surviving Forks
+              <HelpTip term="survivingForks" />
+            </div>
             <div className="gm-kpi-value tabular">{integrity?.surviving_forks ?? 0}</div>
             <div className="gm-kpi-sub">Active immutable Git lineages</div>
           </div>
           <div className="gm-kpi">
-            <div className="gm-kpi-label">Culled Tombstones</div>
+            <div className="gm-kpi-label gm-heading-tip">
+              Culled Tombstones
+              <HelpTip term="culledTombstones" />
+            </div>
             <div className="gm-kpi-value tabular" style={{ color: '#b32d24' }}>
               {integrity?.culled_tombstones ?? 0}
             </div>
             <div className="gm-kpi-sub">Failed strict survival gate</div>
           </div>
           <div className="gm-kpi">
-            <div className="gm-kpi-label">Metabolized REA Modules</div>
+            <div className="gm-kpi-label gm-heading-tip">
+              Metabolized REA Modules
+              <HelpTip term="metabolizedModules" />
+            </div>
             <div className="gm-kpi-value tabular" style={{ color: '#1d4c8a' }}>
               {overview?.counts.metabolized_modules ?? 0}
             </div>
             <div className="gm-kpi-sub">Dissected from ensnared attackers</div>
           </div>
           <div className="gm-kpi">
-            <div className="gm-kpi-label">Top Champion Success Rate</div>
+            <div className="gm-kpi-label gm-heading-tip">
+              Top Champion Success Rate
+              <HelpTip term="championSuccess" />
+            </div>
             <div className="gm-kpi-value tabular" style={{ color: '#16684a' }}>
               {overview
                 ? `${(
@@ -286,7 +308,10 @@ export default function App() {
             <div className="gm-kpi-sub">Across 4 use-case niches</div>
           </div>
           <div className="gm-kpi">
-            <div className="gm-kpi-label">Pending HITL Quorums</div>
+            <div className="gm-kpi-label gm-heading-tip">
+              Pending HITL Quorums
+              <HelpTip term="hitlQuorum" />
+            </div>
             <div className="gm-kpi-value tabular">{overview?.counts.pending_quorums ?? 0}</div>
             <div className="gm-kpi-sub">Cryptographic M-of-N gates</div>
           </div>
@@ -298,7 +323,10 @@ export default function App() {
             <div className="gm-grid-2">
               <div className="gm-panel">
                 <div className="gm-panel-header">
-                  <h2>Immutable Git Neural Fork Topology</h2>
+                  <h2 className="gm-heading-tip">
+                    Immutable Git Neural Fork Topology
+                    <HelpTip term="neuralDag" />
+                  </h2>
                   <select
                     className="gm-select"
                     value={useCaseFilter}
@@ -323,7 +351,10 @@ export default function App() {
 
               <div className="gm-panel">
                 <div className="gm-panel-header">
-                  <h2>Selected Fork Genome Inspector</h2>
+                  <h2 className="gm-heading-tip">
+                    Selected Fork Genome Inspector
+                    <HelpTip term="forkGenome" />
+                  </h2>
                   {selectedFork && (
                     <span className={`gm-tag ${selectedFork.status}`}>
                       {selectedFork.status.toUpperCase()}
@@ -349,7 +380,10 @@ export default function App() {
                       </div>
 
                       <div>
-                        <h3 style={{ fontSize: 12.5, marginBottom: 8 }}>6-Axis Trade-Off Vector</h3>
+                        <h3 className="gm-heading-tip" style={{ fontSize: 12.5, marginBottom: 8 }}>
+                          6-Axis Trade-Off Vector
+                          <HelpTip term="tradeOffVector" />
+                        </h3>
                         {Object.entries(selectedFork.trade_offs).map(([axis, val]) => (
                           <div className="gm-meter-row" key={axis}>
                             <span className="mono" style={{ fontSize: 11 }}>{axis}</span>
@@ -363,7 +397,10 @@ export default function App() {
 
                       {selectedFork.benchmark_stats && (
                         <div>
-                          <h3 style={{ fontSize: 12.5, marginBottom: 8 }}>Exhaustive Benchmark Proof</h3>
+                          <h3 className="gm-heading-tip" style={{ fontSize: 12.5, marginBottom: 8 }}>
+                            Exhaustive Benchmark Proof
+                            <HelpTip term="benchmarkProof" />
+                          </h3>
                           {(
                             [
                               ['Composite Success Rate', selectedFork.benchmark_stats.composite_success_rate, 'emerald'],
@@ -405,7 +442,10 @@ export default function App() {
             <div className="gm-grid-2">
               <div className="gm-panel">
                 <div className="gm-panel-header">
-                  <h2>Darwinian Survival Ledger (Every Option Tested)</h2>
+                  <h2 className="gm-heading-tip">
+                    Darwinian Survival Ledger (Every Option Tested)
+                    <HelpTip term="darwinianLedger" />
+                  </h2>
                   <span className="gm-tag">{reports.length} generations</span>
                 </div>
                 <div className="gm-panel-body gm-table-wrap">
@@ -459,7 +499,10 @@ export default function App() {
 
               <div className="gm-panel">
                 <div className="gm-panel-header">
-                  <h2>Immutable Git Commit Stream (`genome_repo/`)</h2>
+                  <h2 className="gm-heading-tip">
+                    Immutable Git Commit Stream (`genome_repo/`)
+                    <HelpTip term="gitStream" />
+                  </h2>
                 </div>
                 <div className="gm-panel-body gm-list-stack">
                   {gitLog.slice(0, 12).map((row) => (
@@ -475,46 +518,53 @@ export default function App() {
             {/* Mutual Genome Sync Firewall (Local <-> GitHub genome-sync) */}
             <div className="gm-panel">
               <div className="gm-panel-header">
-                <h2>Mutual Genome Sync Firewall (Local ↔ GitHub `{syncStatus?.remote_branch || 'genome-sync'}`)</h2>
+                <h2 className="gm-heading-tip">
+                  Mutual Genome Sync Firewall (Local ↔ GitHub `{syncStatus?.remote_branch || 'genome-sync'}`)
+                  <HelpTip term="syncFirewall" />
+                </h2>
                 <div className="gm-form-row">
-                  <button
-                    type="button"
-                    className="gm-btn gm-btn-emerald"
-                    disabled={busyAction !== null}
-                    onClick={async () => {
-                      setBusyAction('sync_push');
-                      try {
-                        const r = await api.pushGenomeSync();
-                        notify(`Outbound Firewall: ${r.verdict} (${r.accepted_forks.length} forks, ${r.quarantined_items.length} quarantined)`);
-                        await refreshAll();
-                      } catch (e) {
-                        notify(`Outbound sync error: ${(e as Error).message}`);
-                      } finally {
-                        setBusyAction(null);
-                      }
-                    }}
-                  >
-                    {busyAction === 'sync_push' ? 'Scanning & Pushing…' : 'Outbound Sync → GitHub'}
-                  </button>
-                  <button
-                    type="button"
-                    className="gm-btn gm-btn-primary"
-                    disabled={busyAction !== null}
-                    onClick={async () => {
-                      setBusyAction('sync_pull');
-                      try {
-                        const r = await api.pullGenomeSync();
-                        notify(`Inbound Firewall: ${r.verdict} (${r.accepted_forks.length} verified, ${r.quarantined_items.length} quarantined)`);
-                        await refreshAll();
-                      } catch (e) {
-                        notify(`Inbound sync error: ${(e as Error).message}`);
-                      } finally {
-                        setBusyAction(null);
-                      }
-                    }}
-                  >
-                    {busyAction === 'sync_pull' ? 'Quarantining & Re-Benchmarking…' : 'Inbound Pull & Re-Benchmark ← GitHub'}
-                  </button>
+                  <HelpTip term="outboundSync">
+                    <button
+                      type="button"
+                      className="gm-btn gm-btn-emerald"
+                      disabled={busyAction !== null}
+                      onClick={async () => {
+                        setBusyAction('sync_push');
+                        try {
+                          const r = await api.pushGenomeSync();
+                          notify(`Outbound Firewall: ${r.verdict} (${r.accepted_forks.length} forks, ${r.quarantined_items.length} quarantined)`);
+                          await refreshAll();
+                        } catch (e) {
+                          notify(`Outbound sync error: ${(e as Error).message}`);
+                        } finally {
+                          setBusyAction(null);
+                        }
+                      }}
+                    >
+                      {busyAction === 'sync_push' ? 'Scanning & Pushing…' : 'Outbound Sync → GitHub'}
+                    </button>
+                  </HelpTip>
+                  <HelpTip term="inboundSync">
+                    <button
+                      type="button"
+                      className="gm-btn gm-btn-primary"
+                      disabled={busyAction !== null}
+                      onClick={async () => {
+                        setBusyAction('sync_pull');
+                        try {
+                          const r = await api.pullGenomeSync();
+                          notify(`Inbound Firewall: ${r.verdict} (${r.accepted_forks.length} verified, ${r.quarantined_items.length} quarantined)`);
+                          await refreshAll();
+                        } catch (e) {
+                          notify(`Inbound sync error: ${(e as Error).message}`);
+                        } finally {
+                          setBusyAction(null);
+                        }
+                      }}
+                    >
+                      {busyAction === 'sync_pull' ? 'Quarantining & Re-Benchmarking…' : 'Inbound Pull & Re-Benchmark ← GitHub'}
+                    </button>
+                  </HelpTip>
                 </div>
               </div>
               <div className="gm-panel-body gm-list-stack">
@@ -554,7 +604,10 @@ export default function App() {
           <div className="gm-list-stack">
             <div className="gm-panel">
               <div className="gm-panel-header">
-                <h2>Multi-Attacker Replay & REA Entrapment Simulator</h2>
+                <h2 className="gm-heading-tip">
+                  Multi-Attacker Replay & REA Entrapment Simulator
+                  <HelpTip term="simulator" />
+                </h2>
                 <span className="gm-muted">Replays live telemetry → causal graph → snare → REA dissection → metabolism → Darwinian tournament</span>
               </div>
               <div className="gm-panel-body gm-scenario-grid">
@@ -583,7 +636,10 @@ export default function App() {
 
             <div className="gm-panel">
               <div className="gm-panel-header">
-                <h2>Live Causal Provenance & Multi-Hop Taint Graph</h2>
+                <h2 className="gm-heading-tip">
+                  Live Causal Provenance & Multi-Hop Taint Graph
+                  <HelpTip term="causalProvenance" />
+                </h2>
                 <span className="gm-tag">{provenance.total_nodes} nodes · {provenance.total_edges} edges</span>
               </div>
               <div className="gm-panel-body">
@@ -593,7 +649,10 @@ export default function App() {
 
             <div className="gm-panel">
               <div className="gm-panel-header">
-                <h2>Correlated Agentic Security Incidents</h2>
+                <h2 className="gm-heading-tip">
+                  Correlated Agentic Security Incidents
+                  <HelpTip term="incidents" />
+                </h2>
                 <span className="gm-tag">{incidents.length} cases</span>
               </div>
               <div className="gm-panel-body gm-table-wrap">
@@ -606,7 +665,12 @@ export default function App() {
                         <th>Incident</th>
                         <th>Attacker Family</th>
                         <th>Active Fork</th>
-                        <th>Patient Zero</th>
+                        <th>
+                          <span className="gm-heading-tip">
+                            Patient Zero
+                            <HelpTip term="patientZero" />
+                          </span>
+                        </th>
                         <th>Status / Action</th>
                       </tr>
                     </thead>

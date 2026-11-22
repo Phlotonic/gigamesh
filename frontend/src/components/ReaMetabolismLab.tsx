@@ -1,4 +1,5 @@
 import type { MetabolizedDefenseModule, OverviewResponse, ReaEvidenceDossier, RedHatControlData } from '../types';
+import { HelpTip } from './HelpTip';
 
 interface Props {
   doctor: OverviewResponse['rea_doctor'];
@@ -12,7 +13,10 @@ export function ReaMetabolismLab({ doctor, dossiers, modules, snares }: Props) {
     <div className="gm-list-stack">
       <div className="gm-panel">
         <div className="gm-panel-header">
-          <h2>Reverse Engineer Anything (morluto/rea) Bridge Status</h2>
+          <h2 className="gm-heading-tip">
+            Reverse Engineer Anything (morluto/rea) Bridge Status
+            <HelpTip term="reaBridge" />
+          </h2>
           <span className={`gm-tag ${doctor.live_rea_available ? 'champion' : 'rea'}`}>
             {doctor.live_rea_available ? 'LIVE REA CLI ATTACHED' : 'REA-CONTRACT LOCAL ENGINE'}
           </span>
@@ -38,7 +42,10 @@ export function ReaMetabolismLab({ doctor, dossiers, modules, snares }: Props) {
       <div className="gm-grid-equal">
         <div className="gm-panel">
           <div className="gm-panel-header">
-            <h2>REA Dissection Dossiers & Residual Unknowns</h2>
+            <h2 className="gm-heading-tip">
+              REA Dissection Dossiers &amp; Residual Unknowns
+              <HelpTip term="reaDossiers" />
+            </h2>
             <span className="gm-tag">{dossiers.length} dossiers</span>
           </div>
           <div className="gm-panel-body gm-list-stack">
@@ -87,7 +94,10 @@ export function ReaMetabolismLab({ doctor, dossiers, modules, snares }: Props) {
 
         <div className="gm-panel">
           <div className="gm-panel-header">
-            <h2>Metabolized Defensive Modules & Cross-Attacker Immunity</h2>
+            <h2 className="gm-heading-tip">
+              Metabolized Defensive Modules &amp; Cross-Attacker Immunity
+              <HelpTip term="crossAttackerImmunity" />
+            </h2>
             <span className="gm-tag champion">{modules.length} metabolized</span>
           </div>
           <div className="gm-panel-body gm-list-stack">
@@ -132,7 +142,10 @@ export function ReaMetabolismLab({ doctor, dossiers, modules, snares }: Props) {
 
             {snares.length > 0 && (
               <div style={{ marginTop: 8 }}>
-                <h3 style={{ fontSize: 13, marginBottom: 8 }}>Active Adaptive Deception Snares ({snares.length})</h3>
+                <h3 className="gm-heading-tip" style={{ fontSize: 13, marginBottom: 8 }}>
+                  Active Adaptive Deception Snares ({snares.length})
+                  <HelpTip term="deceptionSnares" />
+                </h3>
                 {snares.slice(0, 5).map((s) => (
                   <div className="gm-item-box" key={s.session_id} style={{ marginBottom: 6 }}>
                     <div className="gm-row-between">

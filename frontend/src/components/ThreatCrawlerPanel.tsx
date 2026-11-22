@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { CrawlFinding, CrawlRunReport, ThreatCrawlerStatus, ThreatSource } from '../types';
+import { HelpTip } from './HelpTip';
 
 interface Props {
   status: ThreatCrawlerStatus | null;
@@ -192,7 +193,10 @@ export function ThreatCrawlerPanel({
       <div className="gm-panel">
         <div className="gm-panel-body gm-crawler-hero">
           <div>
-            <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 18 }}>Global Threat Intelligence Crawler</h2>
+            <h2 className="gm-heading-tip" style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 18 }}>
+              Global Threat Intelligence Crawler
+              <HelpTip term="threatCrawler" />
+            </h2>
             <p>
               When switched on, GigaMesh regularly reads the latest security advisories from {sources.length} trusted
               government, vendor and community feeds around the world, learns from anything new, and turns it into
@@ -241,7 +245,10 @@ export function ThreatCrawlerPanel({
       {/* Telemetry */}
       <section className="gm-kpi-strip" aria-label="Threat intelligence telemetry">
         <div className="gm-kpi">
-          <div className="gm-kpi-label">Active Feeds</div>
+          <div className="gm-kpi-label gm-heading-tip">
+            Active Feeds
+            <HelpTip term="ssrfGuard" />
+          </div>
           <div className="gm-kpi-value tabular">
             {activeSources.length}/{sources.length}
           </div>
@@ -254,26 +261,38 @@ export function ThreatCrawlerPanel({
           </div>
         </div>
         <div className="gm-kpi">
-          <div className="gm-kpi-label">Intel Items Learned</div>
+          <div className="gm-kpi-label gm-heading-tip">
+            Intel Items Learned
+            <HelpTip term="cveBadge" />
+          </div>
           <div className="gm-kpi-value tabular">{status?.total_findings ?? 0}</div>
           <div className="gm-kpi-sub">{status?.unique_cves ?? 0} unique CVEs · {status?.total_revisions ?? 0} revisions</div>
         </div>
         <div className="gm-kpi">
-          <div className="gm-kpi-label">Actively Exploited</div>
+          <div className="gm-kpi-label gm-heading-tip">
+            Actively Exploited
+            <HelpTip term="activelyExploited" />
+          </div>
           <div className="gm-kpi-value tabular" style={{ color: 'var(--accent-crimson)' }}>
             {status?.actively_exploited_count ?? 0}
           </div>
           <div className="gm-kpi-sub">Confirmed in-the-wild exploitation</div>
         </div>
         <div className="gm-kpi">
-          <div className="gm-kpi-label">Poisoned Content Blocked</div>
+          <div className="gm-kpi-label gm-heading-tip">
+            Poisoned Content Blocked
+            <HelpTip term="poisonedContent" />
+          </div>
           <div className="gm-kpi-value tabular" style={{ color: 'var(--accent-amber)' }}>
             {status?.poisoned_pages_blocked ?? 0}
           </div>
           <div className="gm-kpi-sub">Quarantined &amp; REA-dissected</div>
         </div>
         <div className="gm-kpi">
-          <div className="gm-kpi-label">Schedule</div>
+          <div className="gm-kpi-label gm-heading-tip">
+            Schedule
+            <HelpTip term="deltaUpdates" />
+          </div>
           <div className="gm-kpi-value tabular" style={{ fontSize: 18 }}>
             {enabled ? (status?.running ? 'Running' : 'Starting') : 'Paused'}
           </div>
@@ -287,8 +306,13 @@ export function ThreatCrawlerPanel({
         {/* Feeds */}
         <div className="gm-panel">
           <div className="gm-panel-header">
-            <h2>Trusted Global Feeds</h2>
-            <span className="gm-tag">HTTPS · allowlisted · no redirects</span>
+            <h2 className="gm-heading-tip">
+              Trusted Global Feeds
+              <HelpTip term="deltaUpdates" />
+            </h2>
+            <HelpTip term="ssrfGuard">
+              <span className="gm-tag">HTTPS · allowlisted · no redirects</span>
+            </HelpTip>
           </div>
           <div className="gm-panel-body">
             {sourcesByRegion.map(([region, list]) => (
@@ -347,7 +371,10 @@ export function ThreatCrawlerPanel({
         {/* Latest run */}
         <div className="gm-panel">
           <div className="gm-panel-header">
-            <h2>Latest Update Check</h2>
+            <h2 className="gm-heading-tip">
+              Latest Update Check
+              <HelpTip term="deltaUpdates" />
+            </h2>
             {latestRun && <span className="gm-tag">{timeAgo(latestRun.timestamp)}</span>}
           </div>
           <div className="gm-panel-body gm-list-stack">
@@ -393,7 +420,10 @@ export function ThreatCrawlerPanel({
       {/* Findings */}
       <div className="gm-panel">
         <div className="gm-panel-header">
-          <h2>What GigaMesh Learned</h2>
+          <h2 className="gm-heading-tip">
+            What GigaMesh Learned
+            <HelpTip term="advisoryRevisions" />
+          </h2>
           <div className="gm-form-row">
             {(
               [

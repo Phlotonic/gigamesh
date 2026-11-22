@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { RedHatControlData } from '../types';
+import { HelpTip } from './HelpTip';
 
 interface Props {
   data: RedHatControlData;
@@ -14,7 +15,10 @@ export function RedHatControlPanel({ data }: Props) {
     <div className="gm-list-stack">
       <div className="gm-panel">
         <div className="gm-panel-header">
-          <h2>Dynamic MCP Policy Proxy & Agent Kill-Switch</h2>
+          <h2 className="gm-heading-tip">
+            Dynamic MCP Policy Proxy &amp; Agent Kill-Switch
+            <HelpTip term="mcpProxy" />
+          </h2>
           <span className="gm-tag">
             {data.mcp_proxy.frozen_agents.length} frozen · {Object.keys(data.mcp_proxy.blocked_mcp_tools).length} blocked tools
           </span>
@@ -38,7 +42,7 @@ export function RedHatControlPanel({ data }: Props) {
           </div>
 
           <div>
-            <h3 style={{ fontSize: 13, marginBottom: 8 }}>Blocked MCP Capabilities & Revoked Tokens</h3>
+            <h3 style={{ fontSize: 13, marginBottom: 8 }}>Blocked MCP Capabilities &amp; Revoked Tokens</h3>
             {Object.keys(data.mcp_proxy.blocked_mcp_tools).length === 0 && data.mcp_proxy.revoked_tokens.length === 0 ? (
               <p className="gm-muted" style={{ margin: 0 }}>No blocked tools or revoked OAuth tokens yet.</p>
             ) : (
@@ -63,17 +67,21 @@ export function RedHatControlPanel({ data }: Props) {
 
       <div className="gm-panel">
         <div className="gm-panel-header">
-          <h2>Red Hat Enterprise Linux / OpenShift & Offensive Red-Hat Control Orders</h2>
+          <h2 className="gm-heading-tip">
+            Red Hat Enterprise Linux / OpenShift &amp; Offensive Red-Hat Control Orders
+            <HelpTip term="redhatControl" />
+          </h2>
           <div className="gm-form-row">
             {(['selinux', 'nftables', 'auditd', 'systemd', 'openshift'] as PolicyTab[]).map((t) => (
-              <button
-                key={t}
-                type="button"
-                className={`gm-btn ${policyTab === t ? 'gm-btn-primary' : ''}`}
-                onClick={() => setPolicyTab(t)}
-              >
-                {t.toUpperCase()}
-              </button>
+              <HelpTip key={t} term={t}>
+                <button
+                  type="button"
+                  className={`gm-btn ${policyTab === t ? 'gm-btn-primary' : ''}`}
+                  onClick={() => setPolicyTab(t)}
+                >
+                  {t.toUpperCase()}
+                </button>
+              </HelpTip>
             ))}
           </div>
         </div>

@@ -1,4 +1,5 @@
 import type { EmailListenerStatus, EmailTriageDecision } from '../types';
+import { HelpTip } from './HelpTip';
 
 interface Props {
   status: EmailListenerStatus | null;
@@ -23,7 +24,10 @@ export function EmailTriagePanel({
     <div className="gm-list-stack">
       <div className="gm-panel">
         <div className="gm-panel-header">
-          <h2>Event-Driven Gmail Security Vulnerability Listener</h2>
+          <h2 className="gm-heading-tip">
+            Event-Driven Gmail Security Vulnerability Listener
+            <HelpTip term="emailListener" />
+          </h2>
           <div className="gm-form-row">
             <span className={`gm-tag ${status?.gmail_authenticated ? 'champion' : 'pending'}`}>
               Gmail Auth: {status?.gmail_authenticated ? 'CONNECTED' : 'OFFLINE'}
@@ -52,7 +56,10 @@ export function EmailTriagePanel({
         <div className="gm-panel-body gm-list-stack">
           <div className="gm-row-between">
             <div>
-              <div className="gm-muted">Active Gmail Search Filter & History Cursor</div>
+              <div className="gm-muted gm-heading-tip">
+                Active Gmail Search Filter &amp; Draft-First Safety
+                <HelpTip term="draftFirstSafety" />
+              </div>
               <div className="mono" style={{ fontSize: 11.5, marginTop: 3 }}>
                 query={status?.search_query}
               </div>
@@ -64,9 +71,11 @@ export function EmailTriagePanel({
               <button type="button" className="gm-btn gm-btn-emerald" disabled={busy} onClick={onSimulateLegitCve}>
                 Test Webhook: Legit CVE Disclosure
               </button>
-              <button type="button" className="gm-btn gm-btn-crimson" disabled={busy} onClick={onSimulateHostileInjection}>
-                Test Webhook: Hostile Prompt-Injection Email
-              </button>
+              <HelpTip term="promptInjection">
+                <button type="button" className="gm-btn gm-btn-crimson" disabled={busy} onClick={onSimulateHostileInjection}>
+                  Test Webhook: Hostile Prompt-Injection Email
+                </button>
+              </HelpTip>
             </div>
           </div>
         </div>
@@ -74,7 +83,10 @@ export function EmailTriagePanel({
 
       <div className="gm-panel">
         <div className="gm-panel-header">
-          <h2>Autonomous Email Triage Decisions & Draft Queue</h2>
+          <h2 className="gm-heading-tip">
+            Autonomous Email Triage Decisions &amp; Draft Queue
+            <HelpTip term="spfDkim" />
+          </h2>
           <span className="gm-tag">{decisions.length} triaged</span>
         </div>
         <div className="gm-panel-body gm-list-stack">
