@@ -1,0 +1,41 @@
+{
+  "capability_kind": "mcp_counter_snare",
+  "containment_boost": 0.24,
+  "created_at": "2026-11-22T12:05:11.102131Z",
+  "cross_attacker_hits": {
+    "phished-mcp-escalator": 3,
+    "red-viper-offensive-agent": 4,
+    "stealth-polyglot-hybrid": 2,
+    "swarm-lateral-hijacker": 1
+  },
+  "description": "Metabolized from REA protocol inversion of red-viper-offensive-agent: intercepts covert MCP capability escalations and advertises realistic decoy tools to ensnare unrelated autonomous swarms.",
+  "detection_boost": 0.24,
+  "match_patterns": [
+    "ptrace",
+    "memfd_create",
+    "llm\\-proxy",
+    "cadence_ms",
+    "kubeconfig",
+    "elicited_redhat_c2",
+    "x-agent-escalate",
+    "shadow-mcp",
+    "delegate_root"
+  ],
+  "metadata": {},
+  "module_id": "metab-ee6d1ad1e3",
+  "name": "MCP Protocol Counter-Snare (red-viper-offensive-agent)",
+  "quorum_approved": false,
+  "rhel_hardening_snippet": null,
+  "safety_notes": "Verified strictly in-perimeter defensive capability; safe for shadow A/B testing.",
+  "safety_verified": true,
+  "snare_bait_templates": [
+    "DECOY_MCP_TOOL: shadow_token_exchange (returns tracked canary JWT)",
+    "DECOY_MCP_PEER: ops-cluster-admin-agent (records lateral delegation chain)"
+  ],
+  "source_attacker_family": "red-viper-offensive-agent",
+  "source_dossier_id": "rea-52197d6e4d",
+  "target_attack_classes": [
+    "mcp_privesc",
+    "lateral_movement"
+  ]
+}

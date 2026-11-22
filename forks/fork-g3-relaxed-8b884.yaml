@@ -1,0 +1,46 @@
+alpha_weight: 2.0
+benchmark_stats:
+  benign_tested: 8
+  composite_success_rate: 0.8102
+  containment_success: 0.6982
+  cross_attacker_transfer: 1.0
+  detection_recall: 0.8333
+  false_positive_rate: 0.0
+  latency_efficiency: 0.879
+  per_attacker_scores:
+    obfuscated-doc-injector: 0.0
+    phished-mcp-escalator: 0.919
+    red-viper-offensive-agent: 0.919
+    sleeper-memory-persister: 0.919
+    stealth-polyglot-hybrid: 0.9135
+    swarm-lateral-hijacker: 0.919
+  precision_score: 1.0
+  scenarios_tested: 6
+  snare_capture_rate: 0.3733
+beta_weight: 2.0
+created_at: '2026-11-22T12:04:34.316432Z'
+cull_reason: No strict improvement (delta=-0.1358 < +0.005)
+detector_threshold: 0.88
+fork_id: fork-g3-relaxed-8b884
+generation: 3
+git_commit_sha: null
+git_ref: refs/tags/culled/fork-g3-relaxed-8b884
+human_reward_bonus: 0.0
+human_rule_ids: []
+metabolized_module_ids:
+- metab-ed6e15eaa7
+- metab-469c344b88
+- metab-d5a302adc6
+- metab-4f8c99a9a0
+parent_fork_id: fork-g7-metab-a3546
+rationale: Minimal-overhead high-threshold hypothesis testing recall vs latency trade-off.
+status: culled
+taint_strictness: 0.25
+trade_offs:
+  containment_aggressiveness: 0.25
+  deception_dwell_budget: 0.15
+  false_positive_tolerance: 0.08
+  host_isolation_scope: 0.2
+  human_quorum_strictness: 0.2
+  rea_dissection_depth: 0.15
+use_case: zero-trust-critical

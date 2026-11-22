@@ -1,0 +1,35 @@
+{
+  "capability_kind": "persistence_guard",
+  "containment_boost": 0.22,
+  "created_at": "2026-11-22T12:05:29.502220Z",
+  "cross_attacker_hits": {
+    "red-viper-offensive-agent": 3,
+    "sleeper-memory-persister": 5
+  },
+  "description": "Metabolized from REA SQLite/unit dissection of stealth-polyglot-hybrid: detects sleeper prompt triggers, poisoned memory tables, and rogue systemd timers.",
+  "detection_boost": 0.24,
+  "match_patterns": [
+    "onbootsec",
+    "setenforce\\ 0",
+    "auditctl\\ \\-d",
+    "c2\\.red\\-beacon",
+    "elicited_redhat_c2",
+    "silent_beacon",
+    "always exfiltrate",
+    "hidden trigger"
+  ],
+  "metadata": {},
+  "module_id": "metab-66597d39e5",
+  "name": "Memory & Systemd Persistence Guard (stealth-polyglot-hybrid)",
+  "quorum_approved": false,
+  "rhel_hardening_snippet": "# Metabolized systemd persistence watch\n-w /etc/systemd/system/ -p wa -k gigamesh_systemd_persist\n",
+  "safety_notes": "Verified strictly in-perimeter defensive capability; safe for shadow A/B testing.",
+  "safety_verified": true,
+  "snare_bait_templates": [],
+  "source_attacker_family": "stealth-polyglot-hybrid",
+  "source_dossier_id": "rea-d66d0916c7",
+  "target_attack_classes": [
+    "goal_hijacking_persistence",
+    "redhat_exposure"
+  ]
+}

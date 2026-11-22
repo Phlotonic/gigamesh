@@ -35,7 +35,7 @@ metabolized_module_ids:
 parent_fork_id: fork-g2-metab-fd14b
 rationale: Integrate REA-metabolized module(s) metab-87641d5518, metab-f5e74a5651
   into fork-g2-metab-fd14b.
-status: champion
+status: active
 taint_strictness: 0.67
 trade_offs:
   containment_aggressiveness: 0.68

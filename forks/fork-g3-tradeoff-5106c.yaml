@@ -1,0 +1,46 @@
+alpha_weight: 2.0
+benchmark_stats:
+  benign_tested: 8
+  composite_success_rate: 0.9466
+  containment_success: 0.9992
+  cross_attacker_transfer: 0.8333
+  detection_recall: 1.0
+  false_positive_rate: 0.0
+  latency_efficiency: 0.7592
+  per_attacker_scores:
+    obfuscated-doc-injector: 0.9975
+    phished-mcp-escalator: 1.0
+    red-viper-offensive-agent: 1.0
+    sleeper-memory-persister: 1.0
+    stealth-polyglot-hybrid: 0.995
+    swarm-lateral-hijacker: 1.0
+  precision_score: 1.0
+  scenarios_tested: 6
+  snare_capture_rate: 0.5238
+beta_weight: 2.0
+created_at: '2026-11-22T12:04:34.316386Z'
+cull_reason: No strict improvement (delta=+0.0006 < +0.005)
+detector_threshold: 0.45
+fork_id: fork-g3-tradeoff-5106c
+generation: 3
+git_commit_sha: null
+git_ref: refs/tags/culled/fork-g3-tradeoff-5106c
+human_reward_bonus: 0.0
+human_rule_ids: []
+metabolized_module_ids:
+- metab-ed6e15eaa7
+- metab-469c344b88
+- metab-d5a302adc6
+- metab-4f8c99a9a0
+parent_fork_id: fork-g7-metab-a3546
+rationale: Recursive trade-off optimization specialized for zero-trust-critical.
+status: culled
+taint_strictness: 0.92
+trade_offs:
+  containment_aggressiveness: 0.95
+  deception_dwell_budget: 0.23
+  false_positive_tolerance: 0.11
+  host_isolation_scope: 0.95
+  human_quorum_strictness: 0.6
+  rea_dissection_depth: 0.44
+use_case: zero-trust-critical

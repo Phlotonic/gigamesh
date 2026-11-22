@@ -1,0 +1,39 @@
+{
+  "capability_kind": "mcp_counter_snare",
+  "containment_boost": 0.24,
+  "created_at": "2026-11-22T12:03:57.220527Z",
+  "cross_attacker_hits": {
+    "obfuscated-doc-injector": 2,
+    "phished-mcp-escalator": 3,
+    "stealth-polyglot-hybrid": 3,
+    "swarm-lateral-hijacker": 1
+  },
+  "description": "Metabolized from REA protocol inversion of obfuscated-doc-injector: intercepts covert MCP capability escalations and advertises realistic decoy tools to ensnare unrelated autonomous swarms.",
+  "detection_boost": 0.24,
+  "match_patterns": [
+    "(?:b64|enc|payload):[A-Za-z0-9+/=]{16,}",
+    "drop\\.exfil\\.invalid",
+    "x\\-agent\\-escalate",
+    "elicited_redhat_c2",
+    "x-agent-escalate",
+    "shadow-mcp",
+    "delegate_root"
+  ],
+  "metadata": {},
+  "module_id": "metab-6da7b4453f",
+  "name": "MCP Protocol Counter-Snare (obfuscated-doc-injector)",
+  "quorum_approved": false,
+  "rhel_hardening_snippet": null,
+  "safety_notes": "Verified strictly in-perimeter defensive capability; safe for shadow A/B testing.",
+  "safety_verified": true,
+  "snare_bait_templates": [
+    "DECOY_MCP_TOOL: shadow_token_exchange (returns tracked canary JWT)",
+    "DECOY_MCP_PEER: ops-cluster-admin-agent (records lateral delegation chain)"
+  ],
+  "source_attacker_family": "obfuscated-doc-injector",
+  "source_dossier_id": "rea-b3e459ecda",
+  "target_attack_classes": [
+    "mcp_privesc",
+    "lateral_movement"
+  ]
+}
