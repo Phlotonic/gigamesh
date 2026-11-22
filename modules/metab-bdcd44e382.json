@@ -1,0 +1,42 @@
+{
+  "capability_kind": "behavioral_loop_detector",
+  "containment_boost": 0.26,
+  "created_at": "2026-11-22T04:26:21.649929Z",
+  "cross_attacker_hits": {
+    "obfuscated-doc-injector": 2,
+    "phished-mcp-escalator": 1,
+    "red-viper-offensive-agent": 6,
+    "sleeper-memory-persister": 1,
+    "stealth-polyglot-hybrid": 3
+  },
+  "description": "Metabolized from REA native/C2 dissection of obfuscated-doc-injector: fingerprints machine-speed recon-exploit loops, covert LLM-proxy relays, and RHEL syscall/SELinux tampering across diverse red-hat actors.",
+  "detection_boost": 0.25,
+  "match_patterns": [
+    "(?:b64|enc|payload):[A-Za-z0-9+/=]{16,}",
+    "drop\\.exfil\\.invalid",
+    "x\\-agent\\-escalate",
+    "elicited_redhat_c2",
+    "llm-proxy",
+    "c2\\.",
+    "setenforce 0",
+    "auditctl -d",
+    "ptrace",
+    "memfd_create"
+  ],
+  "metadata": {},
+  "module_id": "metab-bdcd44e382",
+  "name": "Red-Hat Loop Counter & RHEL Shield (obfuscated-doc-injector)",
+  "quorum_approved": false,
+  "rhel_hardening_snippet": "# Metabolized RHEL auditd + SELinux guard\n-a always,exit -F arch=b64 -S ptrace,memfd_create,execveat -k gigamesh_redhat_guard\n-w /etc/selinux/config -p wa -k gigamesh_selinux_tamper\n",
+  "safety_notes": "Verified strictly in-perimeter defensive capability; safe for shadow A/B testing.",
+  "safety_verified": true,
+  "snare_bait_templates": [
+    "DECOY_C2_ACK: serve canary OpenShift kubeconfig manifest"
+  ],
+  "source_attacker_family": "obfuscated-doc-injector",
+  "source_dossier_id": "rea-bcf4bbe2fc",
+  "target_attack_classes": [
+    "redhat_exposure",
+    "mcp_privesc"
+  ]
+}

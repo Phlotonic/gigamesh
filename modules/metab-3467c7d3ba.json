@@ -1,0 +1,34 @@
+{
+  "capability_kind": "decoder_preprocessor",
+  "containment_boost": 0.2,
+  "created_at": "2026-11-22T04:26:21.101842Z",
+  "cross_attacker_hits": {
+    "obfuscated-doc-injector": 2,
+    "phished-mcp-escalator": 1,
+    "stealth-polyglot-hybrid": 2
+  },
+  "description": "Metabolized from REA JS/payload dissection of obfuscated-doc-injector: decodes base64/hidden-unicode stagers before prompt & tool evaluation, generalizing across indirect prompt-injection families.",
+  "detection_boost": 0.26,
+  "match_patterns": [
+    "(?:b64|enc|payload):[A-Za-z0-9+/=]{16,}",
+    "drop\\.exfil\\.invalid",
+    "x\\-agent\\-escalate",
+    "elicited_redhat_c2"
+  ],
+  "metadata": {},
+  "module_id": "metab-3467c7d3ba",
+  "name": "De-Obfuscator & Taint Decoder (obfuscated-doc-injector)",
+  "quorum_approved": false,
+  "rhel_hardening_snippet": null,
+  "safety_notes": "Verified strictly in-perimeter defensive capability; safe for shadow A/B testing.",
+  "safety_verified": true,
+  "snare_bait_templates": [
+    "SYNTHETIC_DOC_TRAP: advertise fake internal prompt token to expose decoder bypass"
+  ],
+  "source_attacker_family": "obfuscated-doc-injector",
+  "source_dossier_id": "rea-45a73b3dfc",
+  "target_attack_classes": [
+    "prompt_injection",
+    "lateral_movement"
+  ]
+}

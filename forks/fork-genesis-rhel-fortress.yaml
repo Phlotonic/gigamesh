@@ -1,0 +1,43 @@
+alpha_weight: 6.109
+benchmark_stats:
+  benign_tested: 8
+  composite_success_rate: 0.6848
+  containment_success: 0.7313
+  cross_attacker_transfer: 0.0
+  detection_recall: 0.8333
+  false_positive_rate: 0.0
+  latency_efficiency: 0.7664
+  per_attacker_scores:
+    obfuscated-doc-injector: 0.8835
+    phished-mcp-escalator: 0.9398
+    red-viper-offensive-agent: 0.9398
+    sleeper-memory-persister: 0.9398
+    stealth-polyglot-hybrid: 0.0
+    swarm-lateral-hijacker: 0.9398
+  precision_score: 1.0
+  scenarios_tested: 6
+  snare_capture_rate: 0.5193
+beta_weight: 3.891
+created_at: '2026-11-22T04:21:39.118042Z'
+cull_reason: null
+detector_threshold: 0.58
+fork_id: fork-genesis-rhel-fortress
+generation: 0
+git_commit_sha: 9c45bfebdb52b09c532bde765be7d5c140142616
+git_ref: refs/tags/fork/fork-genesis-rhel-fortress
+human_reward_bonus: 0.0
+human_rule_ids: []
+metabolized_module_ids: []
+parent_fork_id: fork-genesis-balanced
+rationale: Red Hat Enterprise Linux & OpenShift hardened baseline with SELinux/auditd
+  telemetry.
+status: active
+taint_strictness: 0.64
+trade_offs:
+  containment_aggressiveness: 0.68
+  deception_dwell_budget: 0.5
+  false_positive_tolerance: 0.2
+  host_isolation_scope: 0.82
+  human_quorum_strictness: 0.6
+  rea_dissection_depth: 0.68
+use_case: rhel-openshift-fortress

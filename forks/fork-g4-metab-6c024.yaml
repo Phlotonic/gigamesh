@@ -1,0 +1,45 @@
+alpha_weight: 9.28
+benchmark_stats:
+  benign_tested: 8
+  composite_success_rate: 0.8475
+  containment_success: 0.9569
+  cross_attacker_transfer: 0.3333
+  detection_recall: 1.0
+  false_positive_rate: 0.0
+  latency_efficiency: 0.7276
+  per_attacker_scores:
+    obfuscated-doc-injector: 0.9087
+    phished-mcp-escalator: 0.9584
+    red-viper-offensive-agent: 1.0
+    sleeper-memory-persister: 1.0
+    stealth-polyglot-hybrid: 0.99
+    swarm-lateral-hijacker: 0.9584
+  precision_score: 1.0
+  scenarios_tested: 6
+  snare_capture_rate: 0.6464
+beta_weight: 2.762
+created_at: '2026-11-22T04:26:47.893938Z'
+cull_reason: null
+detector_threshold: 0.54
+fork_id: fork-g4-metab-6c024
+generation: 4
+git_commit_sha: 36396c79bc4b6e5a9e9f073f7361f4f4e41445b8
+git_ref: refs/tags/fork/fork-g4-metab-6c024
+human_reward_bonus: 0.0
+human_rule_ids: []
+metabolized_module_ids:
+- metab-c5ff4e4082
+- metab-cc8088ba17
+parent_fork_id: fork-genesis-rhel-fortress
+rationale: Integrate REA-metabolized module(s) metab-c5ff4e4082, metab-cc8088ba17
+  into fork-genesis-rhel-fortress.
+status: active
+taint_strictness: 0.7
+trade_offs:
+  containment_aggressiveness: 0.76
+  deception_dwell_budget: 0.54
+  false_positive_tolerance: 0.18
+  host_isolation_scope: 0.88
+  human_quorum_strictness: 0.6
+  rea_dissection_depth: 0.72
+use_case: rhel-openshift-fortress

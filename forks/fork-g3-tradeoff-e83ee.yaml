@@ -1,0 +1,42 @@
+alpha_weight: 8.767
+benchmark_stats:
+  benign_tested: 8
+  composite_success_rate: 0.7834
+  containment_success: 0.818
+  cross_attacker_transfer: 0.0
+  detection_recall: 0.8333
+  false_positive_rate: 0.0
+  latency_efficiency: 0.8368
+  per_attacker_scores:
+    obfuscated-doc-injector: 0.9908
+    phished-mcp-escalator: 0.9908
+    red-viper-offensive-agent: 0.9908
+    sleeper-memory-persister: 0.9908
+    stealth-polyglot-hybrid: 0.0
+    swarm-lateral-hijacker: 0.9908
+  precision_score: 1.0
+  scenarios_tested: 6
+  snare_capture_rate: 0.2897
+beta_weight: 3.083
+created_at: '2026-11-22T04:26:29.370479Z'
+cull_reason: null
+detector_threshold: 0.53
+fork_id: fork-g3-tradeoff-e83ee
+generation: 3
+git_commit_sha: null
+git_ref: refs/tags/fork/fork-g3-tradeoff-e83ee
+human_reward_bonus: 0.0
+human_rule_ids: []
+metabolized_module_ids: []
+parent_fork_id: fork-genesis-zero-trust
+rationale: Recursive trade-off optimization specialized for zero-trust-critical.
+status: active
+taint_strictness: 0.8
+trade_offs:
+  containment_aggressiveness: 0.94
+  deception_dwell_budget: 0.15
+  false_positive_tolerance: 0.15
+  host_isolation_scope: 0.88
+  human_quorum_strictness: 0.6
+  rea_dissection_depth: 0.36
+use_case: zero-trust-critical

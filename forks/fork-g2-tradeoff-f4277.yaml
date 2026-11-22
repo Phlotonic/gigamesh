@@ -1,0 +1,42 @@
+alpha_weight: 7.972
+benchmark_stats:
+  benign_tested: 8
+  composite_success_rate: 0.684
+  containment_success: 0.6788
+  cross_attacker_transfer: 0.0
+  detection_recall: 0.8333
+  false_positive_rate: 0.0
+  latency_efficiency: 0.8178
+  per_attacker_scores:
+    obfuscated-doc-injector: 0.8509
+    phished-mcp-escalator: 0.9083
+    red-viper-offensive-agent: 0.9083
+    sleeper-memory-persister: 0.9083
+    stealth-polyglot-hybrid: 0.0
+    swarm-lateral-hijacker: 0.9083
+  precision_score: 1.0
+  scenarios_tested: 6
+  snare_capture_rate: 0.4893
+beta_weight: 3.58
+created_at: '2026-11-22T04:26:21.881735Z'
+cull_reason: null
+detector_threshold: 0.59
+fork_id: fork-g2-tradeoff-f4277
+generation: 2
+git_commit_sha: null
+git_ref: refs/tags/fork/fork-g2-tradeoff-f4277
+human_reward_bonus: 0.0
+human_rule_ids: []
+metabolized_module_ids: []
+parent_fork_id: fork-genesis-balanced
+rationale: Recursive trade-off optimization specialized for enterprise-balanced.
+status: active
+taint_strictness: 0.63
+trade_offs:
+  containment_aggressiveness: 0.61
+  deception_dwell_budget: 0.51
+  false_positive_tolerance: 0.19
+  host_isolation_scope: 0.55
+  human_quorum_strictness: 0.5
+  rea_dissection_depth: 0.51
+use_case: enterprise-balanced

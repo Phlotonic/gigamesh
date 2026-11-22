@@ -1,0 +1,44 @@
+alpha_weight: 9.77
+benchmark_stats:
+  benign_tested: 8
+  composite_success_rate: 0.9088
+  containment_success: 0.9741
+  cross_attacker_transfer: 0.6667
+  detection_recall: 1.0
+  false_positive_rate: 0.0
+  latency_efficiency: 0.779
+  per_attacker_scores:
+    obfuscated-doc-injector: 0.8761
+    phished-mcp-escalator: 1.0
+    red-viper-offensive-agent: 1.0
+    sleeper-memory-persister: 1.0
+    stealth-polyglot-hybrid: 0.995
+    swarm-lateral-hijacker: 1.0
+  precision_score: 1.0
+  scenarios_tested: 6
+  snare_capture_rate: 0.736
+beta_weight: 2.456
+created_at: '2026-11-22T04:27:06.375716Z'
+cull_reason: null
+detector_threshold: 0.55
+fork_id: fork-g5-tradeoff-d236b
+generation: 5
+git_commit_sha: null
+git_ref: refs/tags/fork/fork-g5-tradeoff-d236b
+human_reward_bonus: 0.0
+human_rule_ids: []
+metabolized_module_ids:
+- metab-2509cfc6b8
+- metab-0e9f9030ee
+parent_fork_id: fork-g2-metab-fd14b
+rationale: Recursive trade-off optimization specialized for enterprise-balanced.
+status: active
+taint_strictness: 0.69
+trade_offs:
+  containment_aggressiveness: 0.69
+  deception_dwell_budget: 0.55
+  false_positive_tolerance: 0.17
+  host_isolation_scope: 0.61
+  human_quorum_strictness: 0.5
+  rea_dissection_depth: 0.55
+use_case: enterprise-balanced

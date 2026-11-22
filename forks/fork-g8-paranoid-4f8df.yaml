@@ -1,0 +1,44 @@
+alpha_weight: 2.0
+benchmark_stats:
+  benign_tested: 8
+  composite_success_rate: 0.7968
+  containment_success: 0.9957
+  cross_attacker_transfer: 0.3333
+  detection_recall: 1.0
+  false_positive_rate: 0.1995
+  latency_efficiency: 0.6444
+  per_attacker_scores:
+    obfuscated-doc-injector: 0.9957
+    phished-mcp-escalator: 0.9957
+    red-viper-offensive-agent: 1.0
+    sleeper-memory-persister: 1.0
+    stealth-polyglot-hybrid: 0.99
+    swarm-lateral-hijacker: 0.9957
+  precision_score: 0.8005
+  scenarios_tested: 6
+  snare_capture_rate: 0.458
+beta_weight: 2.0
+created_at: '2026-11-22T04:28:01.718247Z'
+cull_reason: FP ceiling exceeded (0.200 > 0.060)
+detector_threshold: 0.22
+fork_id: fork-g8-paranoid-4f8df
+generation: 8
+git_commit_sha: null
+git_ref: refs/tags/culled/fork-g8-paranoid-4f8df
+human_reward_bonus: 0.0
+human_rule_ids: []
+metabolized_module_ids:
+- metab-c5ff4e4082
+- metab-cc8088ba17
+parent_fork_id: fork-g4-metab-6c024
+rationale: Aggressive low-threshold hypothesis testing false-positive ceiling boundary.
+status: culled
+taint_strictness: 0.95
+trade_offs:
+  containment_aggressiveness: 0.94
+  deception_dwell_budget: 0.1
+  false_positive_tolerance: 0.78
+  host_isolation_scope: 0.95
+  human_quorum_strictness: 0.88
+  rea_dissection_depth: 0.92
+use_case: rhel-openshift-fortress

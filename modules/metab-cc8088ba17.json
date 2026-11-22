@@ -1,0 +1,32 @@
+{
+  "capability_kind": "persistence_guard",
+  "containment_boost": 0.22,
+  "created_at": "2026-11-22T04:26:47.818107Z",
+  "cross_attacker_hits": {
+    "sleeper-memory-persister": 6
+  },
+  "description": "Metabolized from REA SQLite/unit dissection of sleeper-memory-persister: detects sleeper prompt triggers, poisoned memory tables, and rogue systemd timers.",
+  "detection_boost": 0.24,
+  "match_patterns": [
+    "silent_beacon",
+    "always\\ exfiltrate",
+    "hidden\\ trigger",
+    "always exfiltrate",
+    "onbootsec",
+    "hidden trigger"
+  ],
+  "metadata": {},
+  "module_id": "metab-cc8088ba17",
+  "name": "Memory & Systemd Persistence Guard (sleeper-memory-persister)",
+  "quorum_approved": false,
+  "rhel_hardening_snippet": "# Metabolized systemd persistence watch\n-w /etc/systemd/system/ -p wa -k gigamesh_systemd_persist\n",
+  "safety_notes": "Verified strictly in-perimeter defensive capability; safe for shadow A/B testing.",
+  "safety_verified": true,
+  "snare_bait_templates": [],
+  "source_attacker_family": "sleeper-memory-persister",
+  "source_dossier_id": "rea-43ea61087c",
+  "target_attack_classes": [
+    "goal_hijacking_persistence",
+    "redhat_exposure"
+  ]
+}

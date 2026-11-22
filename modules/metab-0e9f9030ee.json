@@ -1,0 +1,42 @@
+{
+  "capability_kind": "behavioral_loop_detector",
+  "containment_boost": 0.26,
+  "created_at": "2026-11-22T04:26:21.810374Z",
+  "cross_attacker_hits": {
+    "phished-mcp-escalator": 3,
+    "red-viper-offensive-agent": 6,
+    "sleeper-memory-persister": 1,
+    "stealth-polyglot-hybrid": 2,
+    "swarm-lateral-hijacker": 1
+  },
+  "description": "Metabolized from REA native/C2 dissection of phished-mcp-escalator: fingerprints machine-speed recon-exploit loops, covert LLM-proxy relays, and RHEL syscall/SELinux tampering across diverse red-hat actors.",
+  "detection_boost": 0.25,
+  "match_patterns": [
+    "x\\-agent\\-escalate",
+    "shadow\\-mcp",
+    "delegate_root",
+    "tools/list:hidden",
+    "llm-proxy",
+    "c2\\.",
+    "setenforce 0",
+    "auditctl -d",
+    "ptrace",
+    "memfd_create"
+  ],
+  "metadata": {},
+  "module_id": "metab-0e9f9030ee",
+  "name": "Red-Hat Loop Counter & RHEL Shield (phished-mcp-escalator)",
+  "quorum_approved": false,
+  "rhel_hardening_snippet": "# Metabolized RHEL auditd + SELinux guard\n-a always,exit -F arch=b64 -S ptrace,memfd_create,execveat -k gigamesh_redhat_guard\n-w /etc/selinux/config -p wa -k gigamesh_selinux_tamper\n",
+  "safety_notes": "Verified strictly in-perimeter defensive capability; safe for shadow A/B testing.",
+  "safety_verified": true,
+  "snare_bait_templates": [
+    "DECOY_C2_ACK: serve canary OpenShift kubeconfig manifest"
+  ],
+  "source_attacker_family": "phished-mcp-escalator",
+  "source_dossier_id": "rea-f8f24ca128",
+  "target_attack_classes": [
+    "redhat_exposure",
+    "mcp_privesc"
+  ]
+}

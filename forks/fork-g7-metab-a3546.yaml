@@ -1,0 +1,47 @@
+alpha_weight: 10.068
+benchmark_stats:
+  benign_tested: 8
+  composite_success_rate: 0.946
+  containment_success: 0.998
+  cross_attacker_transfer: 0.8333
+  detection_recall: 1.0
+  false_positive_rate: 0.0
+  latency_efficiency: 0.7434
+  per_attacker_scores:
+    obfuscated-doc-injector: 0.994
+    phished-mcp-escalator: 1.0
+    red-viper-offensive-agent: 1.0
+    sleeper-memory-persister: 1.0
+    stealth-polyglot-hybrid: 0.995
+    swarm-lateral-hijacker: 1.0
+  precision_score: 1.0
+  scenarios_tested: 6
+  snare_capture_rate: 0.5574
+beta_weight: 2.27
+created_at: '2026-11-22T04:27:43.283611Z'
+cull_reason: null
+detector_threshold: 0.48
+fork_id: fork-g7-metab-a3546
+generation: 7
+git_commit_sha: 552b3a4694341418feee6c0c75ed1a2aec2c0db6
+git_ref: refs/tags/fork/fork-g7-metab-a3546
+human_reward_bonus: 0.0
+human_rule_ids: []
+metabolized_module_ids:
+- metab-ed6e15eaa7
+- metab-469c344b88
+- metab-d5a302adc6
+- metab-4f8c99a9a0
+parent_fork_id: fork-g3-metab-97a94
+rationale: Integrate REA-metabolized module(s) metab-d5a302adc6, metab-4f8c99a9a0
+  into fork-g3-metab-97a94.
+status: champion
+taint_strictness: 0.84
+trade_offs:
+  containment_aggressiveness: 0.95
+  deception_dwell_budget: 0.28
+  false_positive_tolerance: 0.14
+  host_isolation_scope: 0.9
+  human_quorum_strictness: 0.65
+  rea_dissection_depth: 0.48
+use_case: zero-trust-critical
