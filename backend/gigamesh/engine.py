@@ -19,6 +19,7 @@ from gigamesh.evolution.autopoiesis import AutopoiesisEngine
 from gigamesh.evolution.evaluator import OptionEvaluator
 from gigamesh.human_sec.hub import HumanSecurityHub
 from gigamesh.integrations.email_listener import EmailSecurityListener
+from gigamesh.integrations.threat_crawler import ThreatIntelCrawler
 from gigamesh.models.asef import AsefEvent, IncidentCase, Severity
 from gigamesh.models.governance import AnalystVote, FederatedStixBundle
 from gigamesh.models.neural_repo import EvolutionGenerationReport
@@ -84,6 +85,12 @@ class GigaMeshEngine:
             state_file=self.config.email_state_path,
             poll_interval_sec=self.config.email_poll_interval_sec,
             create_gmail_drafts=True,
+        )
+        self.threat_crawler = ThreatIntelCrawler(
+            engine=self,
+            enabled_on_boot=self.config.threat_crawler_enabled_on_boot,
+            crawl_interval_sec=self.config.threat_crawler_interval_sec,
+            auto_evolve_on_findings=True,
         )
 
     # ------------------------------------------------------------------

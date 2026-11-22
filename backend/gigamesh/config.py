@@ -98,6 +98,8 @@ class GigaMeshConfig:
     genome_sync_branch: str = "genome-sync"
     email_listener_enabled_on_boot: bool = True
     email_poll_interval_sec: float = 30.0
+    threat_crawler_enabled_on_boot: bool = False
+    threat_crawler_interval_sec: float = 120.0
 
     @property
     def genome_repo_dir(self) -> Path:

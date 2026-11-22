@@ -54,11 +54,40 @@ class EmailListenerToggleRequest(BaseModel):
     create_gmail_drafts: bool | None = None
 
 
+class ThreatCrawlerToggleRequest(BaseModel):
+    enabled: bool
+    crawl_interval_sec: float | None = None
+    auto_evolve_on_findings: bool | None = None
+    enforce_allowlist: bool | None = None
+
+
+class ThreatCrawlerScanRequest(BaseModel):
+    source_ids: list[str] | None = None
+
+
+class ThreatCrawlerDirectDocRequest(BaseModel):
+    url: str
+    title: str
+    raw_body: str
+    content_type: str = "text/html"
+
+
+class ThreatSourceUpsertRequest(BaseModel):
+    source_id: str
+    name: str
+    url: str
+    kind: str = "json_feed"
+    enabled: bool = True
+    trust_tier: float = 0.85
+
+
 def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | None = None) -> FastAPI:
     cfg = config or GigaMeshConfig()
     if enable_autopilot is not None:
         cfg.autopoiesis_enabled_on_boot = enable_autopilot
         cfg.email_listener_enabled_on_boot = enable_autopilot
+        if not enable_autopilot:
+            cfg.threat_crawler_enabled_on_boot = False
 
     engine = GigaMeshEngine(cfg)
 
@@ -68,7 +97,10 @@ def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | No
             engine.autopoiesis.start_autopilot()
         if cfg.email_listener_enabled_on_boot:
             engine.email_listener.start()
+        if cfg.threat_crawler_enabled_on_boot:
+            engine.threat_crawler.start()
         yield
+        engine.threat_crawler.stop()
         engine.email_listener.stop()
         engine.autopoiesis.stop_autopilot()
 
@@ -147,7 +179,7 @@ def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | No
         }
 
     @app.post("/api/evolution/autopilot")
-    def toggle_autopilot(req: AutopilotToggleRequest) -> dict[str, Any]:
+    async def toggle_autopilot(req: AutopilotToggleRequest) -> dict[str, Any]:
         if req.interval_sec is not None and req.interval_sec >= 2.0:
             engine.autopoiesis.interval_sec = req.interval_sec
         if req.enabled:
@@ -303,7 +335,7 @@ def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | No
         }
 
     @app.post("/api/email-listener/toggle")
-    def email_listener_toggle(req: EmailListenerToggleRequest) -> dict[str, Any]:
+    async def email_listener_toggle(req: EmailListenerToggleRequest) -> dict[str, Any]:
         if req.poll_interval_sec is not None and req.poll_interval_sec >= 5.0:
             engine.email_listener.poll_interval_sec = req.poll_interval_sec
         if req.search_query is not None and req.search_query.strip():
@@ -327,6 +359,60 @@ def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | No
     @app.post("/api/email-listener/webhook")
     def email_listener_webhook(payload: dict[str, Any]) -> dict[str, Any]:
         return engine.email_listener.handle_webhook(payload)
+
+    # ------------------------------------------------------------------
+    # Toggle-able Threat Intelligence Web Crawler Endpoints
+    # ------------------------------------------------------------------
+    @app.get("/api/threat-crawler/status")
+    def threat_crawler_status() -> dict[str, Any]:
+        return {
+            "status": engine.threat_crawler.status().model_dump(mode="json"),
+            "recent_findings": [f.model_dump(mode="json") for f in reversed(engine.threat_crawler.findings[-40:])],
+            "recent_runs": [r.model_dump(mode="json") for r in reversed(engine.threat_crawler.runs[-15:])],
+        }
+
+    @app.post("/api/threat-crawler/toggle")
+    async def threat_crawler_toggle(req: ThreatCrawlerToggleRequest) -> dict[str, Any]:
+        if req.crawl_interval_sec is not None and req.crawl_interval_sec >= 10.0:
+            engine.threat_crawler.crawl_interval_sec = req.crawl_interval_sec
+        if req.auto_evolve_on_findings is not None:
+            engine.threat_crawler.auto_evolve_on_findings = req.auto_evolve_on_findings
+        if req.enforce_allowlist is not None:
+            engine.threat_crawler.enforce_allowlist = req.enforce_allowlist
+        if req.enabled:
+            engine.threat_crawler.start()
+        else:
+            engine.threat_crawler.stop()
+        return engine.threat_crawler.status().model_dump(mode="json")
+
+    @app.post("/api/threat-crawler/scan")
+    def threat_crawler_scan(req: ThreatCrawlerScanRequest | None = None) -> dict[str, Any]:
+        ids = req.source_ids if req else None
+        report = engine.threat_crawler.scan_once(source_ids=ids, trigger="manual_api_scan")
+        return report.model_dump(mode="json")
+
+    @app.post("/api/threat-crawler/scan-document")
+    def threat_crawler_scan_document(req: ThreatCrawlerDirectDocRequest) -> dict[str, Any]:
+        try:
+            report = engine.threat_crawler.scan_raw_document(
+                url=req.url,
+                title=req.title,
+                raw_body=req.raw_body,
+                content_type=req.content_type,
+            )
+            return report.model_dump(mode="json")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/threat-crawler/sources")
+    def threat_crawler_upsert_source(req: ThreatSourceUpsertRequest) -> dict[str, Any]:
+        from gigamesh.integrations.threat_crawler import ThreatSource
+
+        try:
+            src = engine.threat_crawler.add_or_update_source(ThreatSource(**req.model_dump()))
+            return src.model_dump(mode="json")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # ------------------------------------------------------------------
     # Live WebSocket Stream

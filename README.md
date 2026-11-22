@@ -22,6 +22,7 @@ Every defensive option is exhaustively benchmarked across multi-attacker and ben
 | **Human Security Hub** | `backend/gigamesh/human_sec/hub.py` | Collective analyst voting & rule synthesis, human-identity risk correlation (MFA/phishing/OAuth), cryptographic M-of-N HITL quorum gates, and signed STIX 2.1 federated motif exchange. |
 | **Active Control Plane** | `backend/gigamesh/control/` | Adaptive Deception Snare & forensic harvester, Dynamic MCP Policy Proxy & kill-switch, and Red-Hat Host Controller generating SELinux, `nftables`, `auditd`, `systemd`, and OpenShift `NetworkPolicy` containment artifacts. |
 | **Email Vulnerability Listener** | `backend/gigamesh/integrations/email_listener.py` | Event-driven Gmail History/PubSub listener triaging security disclosures through zero-trust prompt-injection detection first: ensnares & REA-dissects hostile emails, opens HITL Quorums for critical/contamination reports, synthesizes RHEL hardening orders, and prepares human-reviewable Markdown Gmail drafts (never auto-sends unattended). |
+| **Threat Intel Web Crawler** | `backend/gigamesh/integrations/threat_crawler.py` | Toggle-able, SSRF-hardened threat-intelligence crawler scanning allowlisted public advisory feeds (GHSA, Red Hat Security Data, CISA KEV). Respects anti-bot/CAPTCHA gates, quarantines & REA-dissects poisoned pages attempting prompt injection, exports signed STIX 2.1 motifs, and validates extracted defenses via Darwinian benchmarking. |
 
 ---
 
