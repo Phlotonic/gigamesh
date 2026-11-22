@@ -114,6 +114,14 @@ export interface OverviewResponse {
     human_rules: number;
     pending_quorums: number;
     redhat_orders: number;
+    threat_intel_findings?: number;
+  };
+  threat_crawler?: {
+    enabled: boolean;
+    running: boolean;
+    interval_sec: number;
+    active_sources: number;
+    last_run_at: string | null;
   };
 }
 
@@ -353,4 +361,98 @@ export interface EmailTriageDecision {
   draft_preview: string;
   actions_taken: string[];
   status: string;
+}
+
+export interface ThreatSource {
+  source_id: string;
+  name: string;
+  url: string;
+  kind: string;
+  enabled: boolean;
+  trust_tier: number;
+  region: string;
+  publisher: string;
+  max_items: number;
+  builtin: boolean;
+  last_crawled_at: string | null;
+  last_success_at: string | null;
+  last_changed_at: string | null;
+  last_status: string;
+  last_http_status: number | null;
+  etag: string | null;
+  last_modified: string | null;
+  last_new_items: number;
+  total_items_ingested: number;
+  total_checks: number;
+  unchanged_checks: number;
+}
+
+export interface CrawlFinding {
+  finding_id: string;
+  discovered_at: string;
+  source_id: string;
+  source_name: string;
+  region: string;
+  url: string;
+  record_id: string;
+  title: string;
+  summary: string;
+  severity: string;
+  published_at: string;
+  updated_at: string;
+  is_revision: boolean;
+  actively_exploited: boolean;
+  cve_ids: string[];
+  ghsa_ids: string[];
+  mitre_techniques: string[];
+  matched_topics: string[];
+  extracted_patterns: string[];
+  poison_attempt_blocked: boolean;
+  rea_dossier_id: string | null;
+  metabolized_module_id: string | null;
+}
+
+export interface CrawlRunReport {
+  run_id: string;
+  timestamp: string;
+  trigger: string;
+  duration_ms: number;
+  sources_attempted: number;
+  sources_succeeded: number;
+  sources_updated: number;
+  sources_unchanged: number;
+  sources_blocked_or_gated: Array<{ source_id: string; url: string; reason: string }>;
+  source_outcomes: Record<string, string>;
+  new_findings_count: number;
+  revisions_count: number;
+  poisoned_pages_quarantined: number;
+  stix_bundle_id: string | null;
+  evolution_generation_id: number | null;
+  findings: CrawlFinding[];
+}
+
+export interface ThreatCrawlerStatus {
+  enabled: boolean;
+  running: boolean;
+  crawl_interval_sec: number;
+  auto_evolve_on_findings: boolean;
+  enforce_allowlist: boolean;
+  allowed_domains: string[];
+  sources: ThreatSource[];
+  regions_covered: string[];
+  total_runs: number;
+  total_findings: number;
+  total_revisions: number;
+  unique_cves: number;
+  actively_exploited_count: number;
+  poisoned_pages_blocked: number;
+  last_run_at: string | null;
+  next_run_at: string | null;
+  state_file: string | null;
+}
+
+export interface ThreatCrawlerData {
+  status: ThreatCrawlerStatus;
+  recent_findings: CrawlFinding[];
+  recent_runs: CrawlRunReport[];
 }

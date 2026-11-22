@@ -79,6 +79,13 @@ class ThreatSourceUpsertRequest(BaseModel):
     kind: str = "json_feed"
     enabled: bool = True
     trust_tier: float = 0.85
+    region: str = "Custom"
+    publisher: str = ""
+    max_items: int = 10
+
+
+class ThreatSourceToggleRequest(BaseModel):
+    enabled: bool
 
 
 def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | None = None) -> FastAPI:
@@ -90,6 +97,9 @@ def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | No
             cfg.threat_crawler_enabled_on_boot = False
 
     engine = GigaMeshEngine(cfg)
+    if enable_autopilot is False:
+        # Explicit test/offline mode: never auto-start network crawling (persisted toggle untouched)
+        engine.threat_crawler.enabled = False
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -97,10 +107,11 @@ def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | No
             engine.autopoiesis.start_autopilot()
         if cfg.email_listener_enabled_on_boot:
             engine.email_listener.start()
-        if cfg.threat_crawler_enabled_on_boot:
+        # Resume the crawler if the operator left it ON (persisted) or config forces it on boot
+        if cfg.threat_crawler_enabled_on_boot or engine.threat_crawler.enabled:
             engine.threat_crawler.start()
         yield
-        engine.threat_crawler.stop()
+        engine.threat_crawler.shutdown()
         engine.email_listener.stop()
         engine.autopoiesis.stop_autopilot()
 
@@ -411,6 +422,23 @@ def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | No
         try:
             src = engine.threat_crawler.add_or_update_source(ThreatSource(**req.model_dump()))
             return src.model_dump(mode="json")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/threat-crawler/sources/{source_id}/toggle")
+    def threat_crawler_toggle_source(source_id: str, req: ThreatSourceToggleRequest) -> dict[str, Any]:
+        try:
+            return engine.threat_crawler.set_source_enabled(source_id, req.enabled).model_dump(mode="json")
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=f"Unknown source {source_id}") from exc
+
+    @app.delete("/api/threat-crawler/sources/{source_id}")
+    def threat_crawler_delete_source(source_id: str) -> dict[str, Any]:
+        try:
+            engine.threat_crawler.remove_source(source_id)
+            return {"deleted": source_id}
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=f"Unknown source {source_id}") from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

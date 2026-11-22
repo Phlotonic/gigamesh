@@ -118,6 +118,10 @@ class GigaMeshConfig:
         return self.data_dir / "email_listener_state.json"
 
     @property
+    def threat_crawler_state_path(self) -> Path:
+        return self.data_dir / "threat_crawler_state.json"
+
+    @property
     def db_path(self) -> Path:
         return self.data_dir / "gigamesh.db"
 

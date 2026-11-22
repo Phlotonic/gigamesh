@@ -71,7 +71,9 @@ def test_crawler_extracts_cves_blocks_poison_and_respects_captcha(tmp_path: Path
 
     engine.threat_crawler._custom_fetcher = mock_fetcher
 
-    report = engine.threat_crawler.scan_once(trigger="unit_test")
+    report = engine.threat_crawler.scan_once(
+        source_ids=["src-ghsa", "src-redhat-sec", "src-cisa-kev"], trigger="unit_test"
+    )
     assert report.sources_attempted == 3
     assert report.sources_succeeded == 2  # CISA mock returned 403/CAPTCHA -> cleanly skipped!
     assert len(report.sources_blocked_or_gated) == 1

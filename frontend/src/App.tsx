@@ -6,7 +6,10 @@ import { NeuralForkDag } from './components/NeuralForkDag';
 import { ProvenanceGraph } from './components/ProvenanceGraph';
 import { ReaMetabolismLab } from './components/ReaMetabolismLab';
 import { RedHatControlPanel } from './components/RedHatControlPanel';
+import { ThreatCrawlerPanel } from './components/ThreatCrawlerPanel';
 import type {
+  CrawlFinding,
+  CrawlRunReport,
   EmailListenerStatus,
   EmailTriageDecision,
   EvolutionGenerationReport,
@@ -20,9 +23,10 @@ import type {
   RedHatControlData,
   ScenarioMeta,
   SyncFirewallStatus,
+  ThreatCrawlerStatus,
 } from './types';
 
-type TabId = 'neural' | 'provenance' | 'rea' | 'human' | 'redhat' | 'email';
+type TabId = 'neural' | 'provenance' | 'rea' | 'human' | 'redhat' | 'email' | 'crawler';
 
 export default function App() {
   const [tab, setTab] = useState<TabId>('neural');
@@ -55,6 +59,9 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState<SyncFirewallStatus | null>(null);
   const [emailStatus, setEmailStatus] = useState<EmailListenerStatus | null>(null);
   const [emailDecisions, setEmailDecisions] = useState<EmailTriageDecision[]>([]);
+  const [crawlerStatus, setCrawlerStatus] = useState<ThreatCrawlerStatus | null>(null);
+  const [crawlerFindings, setCrawlerFindings] = useState<CrawlFinding[]>([]);
+  const [crawlerRuns, setCrawlerRuns] = useState<CrawlRunReport[]>([]);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -65,7 +72,7 @@ export default function App() {
 
   const refreshAll = useCallback(async () => {
     try {
-      const [ov, fk, ev, pv, inc, scn, rea, hu, rh, sy, em] = await Promise.all([
+      const [ov, fk, ev, pv, inc, scn, rea, hu, rh, sy, em, cr] = await Promise.all([
         api.getOverview(),
         api.getForks(useCaseFilter || undefined),
         api.getEvolutionReports(),
@@ -77,6 +84,7 @@ export default function App() {
         api.getRedHatControl(),
         api.getSyncStatus(),
         api.getEmailListener(),
+        api.getThreatCrawler(),
       ]);
       setOverview(ov);
       setForks(fk.forks);
@@ -95,6 +103,9 @@ export default function App() {
       setSyncStatus(sy);
       setEmailStatus(em.status);
       setEmailDecisions(em.decisions);
+      setCrawlerStatus(cr.status);
+      setCrawlerFindings(cr.recent_findings);
+      setCrawlerRuns(cr.recent_runs);
       setSelectedFork((prev) => {
         if (prev) {
           const updated = fk.forks.find((f) => f.fork_id === prev.fork_id);
@@ -184,6 +195,16 @@ export default function App() {
             Autopoiesis: {overview?.autopilot_running ? `PERPETUAL (${overview.autopilot_interval_sec}s)` : 'PAUSED'} · Gen #{overview?.generation_counter ?? 0}
           </span>
           <button
+            id="chip-threat-crawler"
+            type="button"
+            className={`gm-status-chip ${crawlerStatus?.enabled ? 'ok' : 'warn'}`}
+            style={{ cursor: 'pointer' }}
+            onClick={() => setTab('crawler')}
+            title="Open Global Threat Intelligence Crawler"
+          >
+            Threat Crawler: {crawlerStatus?.enabled ? 'ON' : 'OFF'} ({crawlerStatus?.total_findings ?? 0} intel)
+          </button>
+          <button
             id="btn-toggle-autopilot"
             type="button"
             className="gm-btn"
@@ -212,6 +233,7 @@ export default function App() {
             ['human', `Human Security & Quorum (${overview?.counts.pending_quorums ?? 0})`],
             ['redhat', `Red-Hat Exposure & Control (${redhatControl.redhat_orders.length})`],
             ['email', `Email Security Triage (${emailDecisions.length})`],
+            ['crawler', `Global Threat Crawler (${crawlerStatus?.enabled ? 'ON' : 'OFF'} · ${crawlerStatus?.total_findings ?? 0})`],
           ] as [TabId, string][]
         ).map(([id, label]) => (
           <button
@@ -711,6 +733,80 @@ export default function App() {
                 });
                 notify('Hostile prompt-injection email CAUGHT, ensnared, REA-dissected, metabolized & reply suppressed!');
                 await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+          />
+        )}
+
+        {/* TAB 7: TOGGLE-ABLE GLOBAL THREAT INTELLIGENCE CRAWLER */}
+        {tab === 'crawler' && (
+          <ThreatCrawlerPanel
+            status={crawlerStatus}
+            findings={crawlerFindings}
+            runs={crawlerRuns}
+            busy={busyAction !== null}
+            onToggle={async (enabled, intervalSec) => {
+              setBusyAction('crawler_toggle');
+              try {
+                const st = await api.toggleThreatCrawler(enabled, intervalSec);
+                notify(
+                  st.enabled
+                    ? `Global Threat Intelligence Crawler ON (checking every ${st.crawl_interval_sec}s)`
+                    : 'Global Threat Intelligence Crawler OFF'
+                );
+                await refreshAll();
+              } catch (err) {
+                notify(`Crawler toggle error: ${(err as Error).message}`);
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onScanNow={async (sourceIds) => {
+              setBusyAction('crawler_scan');
+              try {
+                const rep = await api.scanThreatCrawler(sourceIds);
+                notify(
+                  `Global crawl complete: ${rep.new_findings_count} new item(s) across ${rep.sources_updated} updated feed(s) (${rep.sources_unchanged} unchanged)`
+                );
+                await refreshAll();
+              } catch (err) {
+                notify(`Crawl failed: ${(err as Error).message}`);
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onToggleSource={async (sourceId, enabled) => {
+              setBusyAction(`crawler_src_${sourceId}`);
+              try {
+                const src = await api.toggleThreatSource(sourceId, enabled);
+                notify(`${src.name}: ${src.enabled ? 'ENABLED' : 'DISABLED'}`);
+                await refreshAll();
+              } catch (err) {
+                notify(`Source toggle error: ${(err as Error).message}`);
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onAddSource={async (payload) => {
+              setBusyAction('crawler_add_source');
+              try {
+                const src = await api.upsertThreatSource(payload);
+                notify(`Added trusted feed: ${src.name}`);
+                await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onDeleteSource={async (sourceId) => {
+              setBusyAction(`crawler_del_${sourceId}`);
+              try {
+                await api.deleteThreatSource(sourceId);
+                notify(`Removed custom feed ${sourceId}`);
+                await refreshAll();
+              } catch (err) {
+                notify(`Remove error: ${(err as Error).message}`);
               } finally {
                 setBusyAction(null);
               }

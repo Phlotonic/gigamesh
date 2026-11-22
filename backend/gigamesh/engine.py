@@ -91,6 +91,7 @@ class GigaMeshEngine:
             enabled_on_boot=self.config.threat_crawler_enabled_on_boot,
             crawl_interval_sec=self.config.threat_crawler_interval_sec,
             auto_evolve_on_findings=True,
+            state_file=self.config.threat_crawler_state_path,
         )
 
     # ------------------------------------------------------------------
@@ -524,5 +525,13 @@ class GigaMeshEngine:
                 "human_rules": len(self.human_hub.rules),
                 "pending_quorums": sum(1 for q in self.human_hub.quorum_requests.values() if q.status == "pending"),
                 "redhat_orders": len(self.redhat_ctrl.orders),
+                "threat_intel_findings": len(self.threat_crawler.findings),
+            },
+            "threat_crawler": {
+                "enabled": self.threat_crawler.enabled,
+                "running": self.threat_crawler.running,
+                "interval_sec": self.threat_crawler.crawl_interval_sec,
+                "active_sources": sum(1 for s in self.threat_crawler.sources.values() if s.enabled),
+                "last_run_at": self.threat_crawler.last_run_at.isoformat() if self.threat_crawler.last_run_at else None,
             },
         }

@@ -14,6 +14,10 @@ import type {
   SyncFirewallStatus,
   EmailListenerStatus,
   EmailTriageDecision,
+  CrawlRunReport,
+  ThreatCrawlerData,
+  ThreatCrawlerStatus,
+  ThreatSource,
 } from './types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -103,5 +107,30 @@ export const api = {
     request<Record<string, unknown>>('/api/email-listener/webhook', {
       method: 'POST',
       body: JSON.stringify(payload),
+    }),
+  getThreatCrawler: () => request<ThreatCrawlerData>('/api/threat-crawler/status'),
+  toggleThreatCrawler: (enabled: boolean, crawl_interval_sec?: number) =>
+    request<ThreatCrawlerStatus>('/api/threat-crawler/toggle', {
+      method: 'POST',
+      body: JSON.stringify({ enabled, crawl_interval_sec }),
+    }),
+  scanThreatCrawler: (source_ids?: string[]) =>
+    request<CrawlRunReport>('/api/threat-crawler/scan', {
+      method: 'POST',
+      body: JSON.stringify({ source_ids: source_ids ?? null }),
+    }),
+  toggleThreatSource: (sourceId: string, enabled: boolean) =>
+    request<ThreatSource>(`/api/threat-crawler/sources/${encodeURIComponent(sourceId)}/toggle`, {
+      method: 'POST',
+      body: JSON.stringify({ enabled }),
+    }),
+  upsertThreatSource: (payload: { source_id: string; name: string; url: string; kind: string; region?: string }) =>
+    request<ThreatSource>('/api/threat-crawler/sources', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  deleteThreatSource: (sourceId: string) =>
+    request<{ deleted: string }>(`/api/threat-crawler/sources/${encodeURIComponent(sourceId)}`, {
+      method: 'DELETE',
     }),
 };
