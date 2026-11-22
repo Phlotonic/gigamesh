@@ -52,7 +52,7 @@ SECRET_LEAK_PATTERNS = [
 ]
 
 ALLOWED_SYNC_PREFIXES = ("forks/", "modules/", "ledger/")
-ALLOWED_ROOT_FILES = {"sync_manifest.json", "README.md"}
+ALLOWED_ROOT_FILES = {"sync_manifest.json", "README.md", "DATA_LICENSE"}
 
 
 class FirewallCheckFinding(BaseModel):
@@ -330,9 +330,26 @@ class GenomeSyncFirewall:
             )
             (stage_dir / "README.md").write_text(
                 "# GigaMesh Genome Sync Branch (`genome-sync`)\n\n"
+                "Copyright (C) 2026 Adam Dryden and Quanumis Systems.\n\n"
                 "Isolated immutable neural genome branch synchronized exclusively through\n"
                 "`GenomeSyncFirewall`. Never merged directly into `main`; every inbound sync\n"
-                "is independently re-verified and re-benchmarked before local ingestion.\n",
+                "is independently re-verified and re-benchmarked before local ingestion.\n\n"
+                "Licensed under CC-BY-SA-4.0 (see `DATA_LICENSE`) or under a Commercial\n"
+                "Enterprise Genome Subscription (adryden508@gmail.com).\n",
+                encoding="utf-8",
+            )
+            (stage_dir / "DATA_LICENSE").write_text(
+                "GigaMesh Federated Neural Genome Data License\n"
+                "Copyright (C) 2026 Adam Dryden and Quanumis Systems. All rights reserved.\n\n"
+                "Community Genome Tier:\n"
+                "The defensive fork manifests, empirical weight ledgers, and REA-metabolized\n"
+                "defensive motifs on this `genome-sync` branch are licensed under the\n"
+                "Creative Commons Attribution-ShareAlike 4.0 International License (CC-BY-SA-4.0):\n"
+                "https://creativecommons.org/licenses/by-sa/4.0/legalcode\n\n"
+                "Commercial / Enterprise Real-Time Genome Subscriptions:\n"
+                "For commercial use without ShareAlike obligations or for real-time zero-day\n"
+                "enterprise genome feeds, contact Adam Dryden / Quanumis Systems at\n"
+                "adryden508@gmail.com.\n",
                 encoding="utf-8",
             )
 

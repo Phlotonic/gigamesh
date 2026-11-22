@@ -46,3 +46,16 @@ npm install --global rea-agents
 rea doctor
 ```
 When `rea` is present on `PATH`, `ReaBridge` automatically uses live `rea` CLI invocations scoped by `REA_MCP_TOOL_FAMILIES`; otherwise it runs its deterministic REA-contract local dissection engine seamlessly.
+
+---
+
+## Licensing & Commercial Use
+
+**Copyright (C) 2026 Adam Dryden and Quanumis Systems.**
+
+- **Open Source Code (`main`)**: Dual-licensed under **GNU AGPL-3.0** ([`LICENSE`](./LICENSE)) for open-source mutual research & development.
+- **Commercial Dual-License & Enterprise Genome Feeds**: Organizations requiring proprietary modifications without AGPL-3.0 obligations, real-time zero-day metabolized genome feeds, or enterprise fleet add-ons can obtain a commercial license from **Quanumis Systems** — see [`COMMERCIAL_LICENSE.md`](./COMMERCIAL_LICENSE.md) or email [adryden508@gmail.com](mailto:adryden508@gmail.com).
+- **Community Genome Data (`genome-sync`)**: Licensed under **CC-BY-SA-4.0** (see `DATA_LICENSE` on the `genome-sync` branch).
+- **Contributions & CLA**: See [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+- **Defensive Scope & Security**: See [`DISCLAIMER.md`](./DISCLAIMER.md) and [`SECURITY.md`](./SECURITY.md).
+
