@@ -15,6 +15,7 @@ import type {
   EmailListenerStatus,
   EmailTriageDecision,
   CrawlRunReport,
+  OwaspBenchmarkReport,
   ThreatCrawlerData,
   ThreatCrawlerStatus,
   ThreatSource,
@@ -133,4 +134,6 @@ export const api = {
     request<{ deleted: string }>(`/api/threat-crawler/sources/${encodeURIComponent(sourceId)}`, {
       method: 'DELETE',
     }),
+  getOwaspBenchmark: () => request<OwaspBenchmarkReport>('/api/benchmarks/owasp'),
+  runOwaspBenchmark: () => request<OwaspBenchmarkReport>('/api/benchmarks/owasp/run', { method: 'POST' }),
 };

@@ -10,8 +10,10 @@ from datetime import datetime, timezone
 from typing import Any
 
 from gigamesh.config import GigaMeshConfig, USE_CASE_OBJECTIVES
+from gigamesh.control.circuit_breaker import AgenticCircuitBreaker
 from gigamesh.control.mcp_proxy import McpPolicyProxy
 from gigamesh.control.redhat_host import RedHatHostController
+from gigamesh.control.security_audit import HashChainedSecurityAuditLog
 from gigamesh.control.snare import AdaptiveDeceptionSnare
 from gigamesh.detectors.base import DetectorContext
 from gigamesh.detectors.registry import DetectorRegistry
@@ -46,6 +48,9 @@ class GigaMeshEngine:
         self.detectors = DetectorRegistry()
         self.snare = AdaptiveDeceptionSnare(self.config.artifacts_dir)
         self.mcp_proxy = McpPolicyProxy()
+        self.circuit_breaker = AgenticCircuitBreaker()
+        self.security_audit_log = HashChainedSecurityAuditLog()
+        self.last_owasp_report: dict[str, Any] | None = None
         self.redhat_ctrl = RedHatHostController()
         self.rea_bridge = ReaBridge(
             rea_command=self.config.rea_command,
@@ -161,7 +166,7 @@ class GigaMeshEngine:
                 if mid in modules_map and modules_map[mid].safety_verified
             ]
 
-        # 5. Evaluate primary fork detectors + metabolized REA modules + human consensus rules
+        # 5. Evaluate primary fork detectors + metabolized REA modules + human consensus rules + circuit breaker
         primary_ctx = DetectorContext(
             fork=primary_fork,
             graph_context=graph_ctx,
@@ -169,6 +174,16 @@ class GigaMeshEngine:
             human_rules=rules,
         )
         hits = self.detectors.evaluate_event(event, primary_ctx)
+        cb_tripped, cb_hit = self.circuit_breaker.evaluate(event, primary_fork.fork_id)
+        if cb_hit is not None:
+            hits.append(cb_hit)
+            self.security_audit_log.record(
+                category="circuit_breaker",
+                severity="critical",
+                actor=event.actor_id,
+                summary=cb_hit.title,
+                details={"trace_id": event.trace_id, "indicators": cb_hit.indicators},
+            )
 
         # 6. Evaluate shadow A/B fork concurrently without side-effects
         if shadow_fork is not None:
@@ -205,6 +220,13 @@ class GigaMeshEngine:
                 hits=hits,
             )
             top_hit = max(hits, key=lambda h: h.confidence)
+            self.security_audit_log.record(
+                category="owasp_block",
+                severity=top_hit.severity.value,
+                actor=event.actor_id,
+                summary=f"{top_hit.title} ({top_hit.recommended_action})",
+                details={"trace_id": event.trace_id, "detector": top_hit.detector_id, "confidence": top_hit.confidence},
+            )
             # Execute adaptive control depending on active fork's trade-off vector
             if top_hit.recommended_action in ("ensnare_and_rea_dissect", "snare_redirect", "mcp_intercept_to_snare"):
                 if not incident.snare_session_id:
@@ -221,7 +243,14 @@ class GigaMeshEngine:
             else:
                 self.mcp_proxy.freeze_agent(event.actor_id, top_hit.title, primary_fork.fork_id)
                 if event.tool_name:
-                    self.mcp_proxy.block_tool(event.tool_name, top_hit.title)
+                    is_compromised_tool = any(
+                        "rugpull" in ind or "poisoned_mcp_tool" in ind for ind in top_hit.indicators
+                    )
+                    self.mcp_proxy.block_tool(
+                        event.tool_name,
+                        top_hit.title,
+                        actor_id=None if is_compromised_tool else event.actor_id,
+                    )
                 if event.human_principal_id and event.human_risk_score >= 0.45:
                     self.mcp_proxy.revoke_delegation(f"oauth:{event.human_principal_id}")
                 incident.status = "contained"
@@ -270,6 +299,7 @@ class GigaMeshEngine:
             "hits": [h.model_dump(mode="json") for h in hits],
             "incident_id": incident.case_id if incident else None,
             "control_actions": control_actions,
+            "circuit_breaker_tripped": cb_tripped,
         }
 
     def _upsert_incident(
@@ -534,4 +564,6 @@ class GigaMeshEngine:
                 "active_sources": sum(1 for s in self.threat_crawler.sources.values() if s.enabled),
                 "last_run_at": self.threat_crawler.last_run_at.isoformat() if self.threat_crawler.last_run_at else None,
             },
+            "security_audit_chain": self.security_audit_log.verify_chain(),
+            "circuit_breaker": self.circuit_breaker.status(),
         }

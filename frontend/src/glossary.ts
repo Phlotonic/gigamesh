@@ -218,6 +218,19 @@ export const GLOSSARY = {
     title: 'Poisoned Content Blocked',
     body: 'Web pages or advisories that tried to smuggle hidden AI-hijacking commands into the crawler. GigaMesh quarantines them instead of trusting them.',
   },
+  owaspBenchmark: {
+    title: 'OWASP Triple-Framework Benchmark (30 Threat Categories)',
+    body: 'Tests GigaMesh live against all three international OWASP Top 10 standards: Agentic AI (2026), LLM Apps (2025), and Web Apps (2025), plus safe everyday control checks.',
+    why: 'Proves GigaMesh blocks real attacks across every major category while keeping normal work uninterrupted.',
+  },
+  benignFpRate: {
+    title: 'False-Alarm Rate (Benign Controls)',
+    body: 'Measures whether GigaMesh accidentally blocks safe, everyday work. 0% means zero annoying false alarms.',
+  },
+  circuitBreaker: {
+    title: 'Cognitive & Blast-Radius Circuit Breaker',
+    body: 'Automatically halts runaway AI agent swarms, recursive delegation storms, and token/cost floods before they can cascade or drain your budget.',
+  },
 } as const satisfies Record<string, GlossaryEntry>;
 
 export type GlossaryKey = keyof typeof GLOSSARY;

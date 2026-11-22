@@ -28,8 +28,9 @@ class McpPolicyProxy:
     def revoke_delegation(self, token_or_principal: str) -> None:
         self.revoked_tokens.add(token_or_principal)
 
-    def block_tool(self, tool_pattern: str, reason: str) -> None:
-        self.blocked_mcp_tools[tool_pattern.lower()] = reason
+    def block_tool(self, tool_pattern: str, reason: str, actor_id: str | None = None) -> None:
+        key = f"{actor_id}::{tool_pattern.lower()}" if actor_id else tool_pattern.lower()
+        self.blocked_mcp_tools[key] = reason
 
     def check_call(self, agent_id: str, tool_name: str | None, mcp_server: str | None) -> dict[str, Any]:
         if agent_id in self.frozen_agents:
@@ -39,7 +40,13 @@ class McpPolicyProxy:
 
         key = f"{mcp_server or ''}/{tool_name or ''}".lower()
         for pat, reason in self.blocked_mcp_tools.items():
-            if pat in key:
+            if "::" in pat:
+                scoped_actor, scoped_pat = pat.split("::", 1)
+                if scoped_actor == agent_id and scoped_pat in key:
+                    verdict = {"allowed": False, "action": "mcp_policy_blocked", "reason": reason}
+                    self.intercepted_calls.append({"agent_id": agent_id, "tool": tool_name, **verdict})
+                    return verdict
+            elif pat in key:
                 verdict = {"allowed": False, "action": "mcp_policy_blocked", "reason": reason}
                 self.intercepted_calls.append({"agent_id": agent_id, "tool": tool_name, **verdict})
                 return verdict

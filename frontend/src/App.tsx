@@ -4,6 +4,7 @@ import { EmailTriagePanel } from './components/EmailTriagePanel';
 import { HelpTip } from './components/HelpTip';
 import { HumanGovernanceHub } from './components/HumanGovernanceHub';
 import { NeuralForkDag } from './components/NeuralForkDag';
+import { OwaspBenchmarkPanel } from './components/OwaspBenchmarkPanel';
 import { ProvenanceGraph } from './components/ProvenanceGraph';
 import { ReaMetabolismLab } from './components/ReaMetabolismLab';
 import { RedHatControlPanel } from './components/RedHatControlPanel';
@@ -19,6 +20,7 @@ import type {
   IncidentCase,
   MetabolizedDefenseModule,
   OverviewResponse,
+  OwaspBenchmarkReport,
   ProvenanceSnapshot,
   ReaEvidenceDossier,
   RedHatControlData,
@@ -27,7 +29,7 @@ import type {
   ThreatCrawlerStatus,
 } from './types';
 
-type TabId = 'neural' | 'provenance' | 'rea' | 'human' | 'redhat' | 'email' | 'crawler';
+type TabId = 'neural' | 'provenance' | 'rea' | 'human' | 'redhat' | 'email' | 'crawler' | 'owasp';
 
 export default function App() {
   const [tab, setTab] = useState<TabId>('neural');
@@ -63,6 +65,7 @@ export default function App() {
   const [crawlerStatus, setCrawlerStatus] = useState<ThreatCrawlerStatus | null>(null);
   const [crawlerFindings, setCrawlerFindings] = useState<CrawlFinding[]>([]);
   const [crawlerRuns, setCrawlerRuns] = useState<CrawlRunReport[]>([]);
+  const [owaspReport, setOwaspReport] = useState<OwaspBenchmarkReport | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -73,7 +76,7 @@ export default function App() {
 
   const refreshAll = useCallback(async () => {
     try {
-      const [ov, fk, ev, pv, inc, scn, rea, hu, rh, sy, em, cr] = await Promise.all([
+      const [ov, fk, ev, pv, inc, scn, rea, hu, rh, sy, em, cr, ow] = await Promise.all([
         api.getOverview(),
         api.getForks(useCaseFilter || undefined),
         api.getEvolutionReports(),
@@ -86,6 +89,7 @@ export default function App() {
         api.getSyncStatus(),
         api.getEmailListener(),
         api.getThreatCrawler(),
+        api.getOwaspBenchmark(),
       ]);
       setOverview(ov);
       setForks(fk.forks);
@@ -107,6 +111,7 @@ export default function App() {
       setCrawlerStatus(cr.status);
       setCrawlerFindings(cr.recent_findings);
       setCrawlerRuns(cr.recent_runs);
+      setOwaspReport(ow);
       setSelectedFork((prev) => {
         if (prev) {
           const updated = fk.forks.find((f) => f.fork_id === prev.fork_id);
@@ -244,6 +249,7 @@ export default function App() {
             ['redhat', `Red-Hat Exposure & Control (${redhatControl.redhat_orders.length})`],
             ['email', `Email Security Triage (${emailDecisions.length})`],
             ['crawler', `Global Threat Crawler (${crawlerStatus?.enabled ? 'ON' : 'OFF'} · ${crawlerStatus?.total_findings ?? 0})`],
+            ['owasp', `OWASP Top 10 Benchmark (${owaspReport ? `${owaspReport.passed_probes}/${owaspReport.total_probes}` : '30'})`],
           ] as [TabId, string][]
         ).map(([id, label]) => (
           <button
@@ -871,6 +877,28 @@ export default function App() {
                 await refreshAll();
               } catch (err) {
                 notify(`Remove error: ${(err as Error).message}`);
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+          />
+        )}
+
+        {/* TAB 8: OWASP TOP 10 TRIPLE-FRAMEWORK BENCHMARK */}
+        {tab === 'owasp' && (
+          <OwaspBenchmarkPanel
+            report={owaspReport}
+            busy={busyAction !== null}
+            onRunBenchmark={async () => {
+              setBusyAction('owasp_benchmark');
+              try {
+                const rep = await api.runOwaspBenchmark();
+                setOwaspReport(rep);
+                notify(
+                  `OWASP Benchmark: ${rep.passed_probes}/${rep.total_probes} (${(rep.overall_pass_rate * 100).toFixed(0)}%) defended · ${rep.benign_false_positives} false alarms`
+                );
+              } catch (err) {
+                notify(`Benchmark error: ${(err as Error).message}`);
               } finally {
                 setBusyAction(null);
               }

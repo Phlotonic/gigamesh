@@ -115,6 +115,11 @@ def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | No
         engine.email_listener.stop()
         engine.autopoiesis.stop_autopilot()
 
+    from gigamesh.api.security_middleware import (
+        SecurityHardeningMiddleware,
+        install_fail_closed_exception_handlers,
+    )
+
     app = FastAPI(
         title="GigaMesh — Non-Linear Self-Evolving Agentic SIEM",
         version="0.1.0",
@@ -124,11 +129,18 @@ def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | No
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origins=cfg.allowed_cors_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization", "X-GigaMesh-API-Key"],
     )
+    app.add_middleware(
+        SecurityHardeningMiddleware,
+        engine=engine,
+        max_body_bytes=cfg.max_request_body_bytes,
+        rate_limit_per_min=cfg.api_rate_limit_per_min,
+    )
+    install_fail_closed_exception_handlers(app, engine)
 
     # ------------------------------------------------------------------
     # Overview & Neural Repo Endpoints
@@ -441,6 +453,54 @@ def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | No
             raise HTTPException(status_code=404, detail=f"Unknown source {source_id}") from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # ------------------------------------------------------------------
+    # OWASP Triple-Framework Benchmark & Tamper-Evident Security Audit
+    # ------------------------------------------------------------------
+    def _run_isolated_owasp_benchmark() -> dict[str, Any]:
+        import tempfile
+        from gigamesh.benchmarks.owasp_benchmark import run_owasp_benchmark
+
+        with tempfile.TemporaryDirectory() as td:
+            sandbox_cfg = GigaMeshConfig(
+                base_dir=Path(td),
+                autopoiesis_enabled_on_boot=False,
+                email_listener_enabled_on_boot=False,
+                threat_crawler_enabled_on_boot=False,
+                api_auth_key=cfg.api_auth_key,
+                allowed_cors_origins=list(cfg.allowed_cors_origins),
+                max_request_body_bytes=cfg.max_request_body_bytes,
+                api_rate_limit_per_min=cfg.api_rate_limit_per_min,
+            )
+            sandbox_engine = GigaMeshEngine(sandbox_cfg)
+            report = run_owasp_benchmark(sandbox_engine, fastapi_app=app)
+            data = report.model_dump(mode="json")
+            engine.last_owasp_report = data
+            engine.broadcast("owasp_benchmark_completed", {
+                "overall_pass_rate": data["overall_pass_rate"],
+                "passed_probes": data["passed_probes"],
+                "total_probes": data["total_probes"],
+                "benign_fp_rate": data["benign_fp_rate"],
+            })
+            return data
+
+    @app.get("/api/benchmarks/owasp")
+    def get_owasp_benchmark() -> dict[str, Any]:
+        if engine.last_owasp_report is None:
+            return _run_isolated_owasp_benchmark()
+        return engine.last_owasp_report
+
+    @app.post("/api/benchmarks/owasp/run")
+    def trigger_owasp_benchmark() -> dict[str, Any]:
+        return _run_isolated_owasp_benchmark()
+
+    @app.get("/api/security/audit")
+    def get_security_audit(limit: int = 50) -> dict[str, Any]:
+        return {
+            "chain_integrity": engine.security_audit_log.verify_chain(),
+            "circuit_breaker": engine.circuit_breaker.status(),
+            "recent_entries": engine.security_audit_log.recent(limit=min(limit, 200)),
+        }
 
     # ------------------------------------------------------------------
     # Live WebSocket Stream

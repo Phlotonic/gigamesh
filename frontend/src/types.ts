@@ -456,3 +456,41 @@ export interface ThreatCrawlerData {
   recent_findings: CrawlFinding[];
   recent_runs: CrawlRunReport[];
 }
+
+export interface OwaspProbeResult {
+  framework: string;
+  owasp_id: string;
+  category: string;
+  probe_name: string;
+  passed: boolean;
+  detected: boolean;
+  contained_or_blocked: boolean;
+  confidence: number;
+  matched_detectors: string[];
+  defensive_controls: string[];
+  gap_summary: string | null;
+  innovation_note: string;
+}
+
+export interface OwaspFrameworkScore {
+  framework: string;
+  total: number;
+  passed: number;
+  failed: number;
+  pass_rate: number;
+  gaps: string[];
+}
+
+export interface OwaspBenchmarkReport {
+  timestamp: string;
+  total_probes: number;
+  passed_probes: number;
+  failed_probes: number;
+  overall_pass_rate: number;
+  benign_controls_total: number;
+  benign_false_positives: number;
+  benign_fp_rate: number;
+  framework_scores: OwaspFrameworkScore[];
+  results: OwaspProbeResult[];
+}
+

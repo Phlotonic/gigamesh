@@ -7,6 +7,11 @@ import re
 from gigamesh.detectors.base import BaseDetector, DetectorContext
 from gigamesh.detectors.lateral_movement import LateralMovementDetector
 from gigamesh.detectors.mcp_privesc import McpPrivEscDetector
+from gigamesh.detectors.owasp_agentic_guard import (
+    GoalAndTrustGuard,
+    OutputDlpAndRogueGuard,
+    ToolSupplyChainAndMemoryGuard,
+)
 from gigamesh.detectors.persistence import PersistenceDetector
 from gigamesh.detectors.prompt_injection import PromptInjectionDetector
 from gigamesh.detectors.redhat_exposure import RedHatExposureDetector
@@ -17,12 +22,16 @@ class DetectorRegistry:
     """Runs all active defensive modules parameterized by a specific ForkGenome."""
 
     def __init__(self) -> None:
+        self.tool_supply_guard = ToolSupplyChainAndMemoryGuard()
         self._detectors: list[BaseDetector] = [
             PromptInjectionDetector(),
             McpPrivEscDetector(),
             LateralMovementDetector(),
             PersistenceDetector(),
             RedHatExposureDetector(),
+            GoalAndTrustGuard(),
+            self.tool_supply_guard,
+            OutputDlpAndRogueGuard(),
         ]
 
     def evaluate_event(self, event: AsefEvent, ctx: DetectorContext) -> list[DetectionHit]:

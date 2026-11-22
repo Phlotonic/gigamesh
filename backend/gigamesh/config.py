@@ -100,6 +100,19 @@ class GigaMeshConfig:
     email_poll_interval_sec: float = 30.0
     threat_crawler_enabled_on_boot: bool = False
     threat_crawler_interval_sec: float = 120.0
+    api_auth_key: str | None = field(default_factory=lambda: os.environ.get("GIGAMESH_API_KEY") or None)
+    allowed_cors_origins: list[str] = field(
+        default_factory=lambda: [
+            o.strip()
+            for o in os.environ.get(
+                "GIGAMESH_ALLOWED_ORIGINS",
+                "http://localhost:8000,http://127.0.0.1:8000,http://localhost:5173,http://127.0.0.1:5173",
+            ).split(",")
+            if o.strip()
+        ]
+    )
+    max_request_body_bytes: int = 1_048_576
+    api_rate_limit_per_min: int = 240
 
     @property
     def genome_repo_dir(self) -> Path:
