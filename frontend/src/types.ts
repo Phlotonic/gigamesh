@@ -312,3 +312,45 @@ export interface SyncFirewallStatus {
   blocked_contaminations: number;
   recent_reports: SyncFirewallReport[];
 }
+
+export interface EmailListenerStatus {
+  running: boolean;
+  gmail_authenticated: boolean;
+  gmail_cli_path: string | null;
+  poll_interval_sec: number;
+  search_query: string;
+  create_gmail_drafts: boolean;
+  auto_send_blocked: boolean;
+  last_history_id: string | null;
+  last_poll_at: string | null;
+  processed_count: number;
+  decisions_count: number;
+  hostile_blocked_count: number;
+  drafts_created_count: number;
+}
+
+export interface EmailTriageDecision {
+  triage_id: string;
+  triaged_at: string;
+  message_id: string;
+  sender: string;
+  subject: string;
+  classification: string;
+  severity: string;
+  confidence: number;
+  spf_dkim_verified: boolean;
+  prompt_injection_detected: boolean;
+  cve_ids: string[];
+  affected_components: string[];
+  referenced_forks: string[];
+  extracted_iocs: string[];
+  incident_id: string | null;
+  quorum_id: string | null;
+  rea_dossier_id: string | null;
+  evolution_generation_id: number | null;
+  draft_created: boolean;
+  draft_id: string | null;
+  draft_preview: string;
+  actions_taken: string[];
+  status: string;
+}

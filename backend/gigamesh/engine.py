@@ -18,6 +18,7 @@ from gigamesh.detectors.registry import DetectorRegistry
 from gigamesh.evolution.autopoiesis import AutopoiesisEngine
 from gigamesh.evolution.evaluator import OptionEvaluator
 from gigamesh.human_sec.hub import HumanSecurityHub
+from gigamesh.integrations.email_listener import EmailSecurityListener
 from gigamesh.models.asef import AsefEvent, IncidentCase, Severity
 from gigamesh.models.governance import AnalystVote, FederatedStixBundle
 from gigamesh.models.neural_repo import EvolutionGenerationReport
@@ -77,6 +78,12 @@ class GigaMeshEngine:
             human_hub=self.human_hub,
             interval_sec=self.config.autopoiesis_interval_sec,
             on_generation=self._on_generation_broadcast,
+        )
+        self.email_listener = EmailSecurityListener(
+            engine=self,
+            state_file=self.config.email_state_path,
+            poll_interval_sec=self.config.email_poll_interval_sec,
+            create_gmail_drafts=True,
         )
 
     # ------------------------------------------------------------------

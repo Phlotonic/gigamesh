@@ -12,6 +12,8 @@ import type {
   ScenarioMeta,
   SyncFirewallReport,
   SyncFirewallStatus,
+  EmailListenerStatus,
+  EmailTriageDecision,
 } from './types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -86,4 +88,20 @@ export const api = {
   getSyncStatus: () => request<SyncFirewallStatus>('/api/neural-repo/sync/status'),
   pushGenomeSync: () => request<SyncFirewallReport>('/api/neural-repo/sync/push', { method: 'POST' }),
   pullGenomeSync: () => request<SyncFirewallReport>('/api/neural-repo/sync/pull', { method: 'POST' }),
+  getEmailListener: () =>
+    request<{ status: EmailListenerStatus; decisions: EmailTriageDecision[] }>('/api/email-listener/status'),
+  toggleEmailListener: (enabled: boolean) =>
+    request<EmailListenerStatus>('/api/email-listener/toggle', {
+      method: 'POST',
+      body: JSON.stringify({ enabled }),
+    }),
+  pollEmailListener: () =>
+    request<{ new_decisions: EmailTriageDecision[]; status: EmailListenerStatus }>('/api/email-listener/poll', {
+      method: 'POST',
+    }),
+  sendEmailWebhook: (payload: Record<string, unknown>) =>
+    request<Record<string, unknown>>('/api/email-listener/webhook', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 };

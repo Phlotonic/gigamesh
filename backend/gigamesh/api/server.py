@@ -47,10 +47,18 @@ class RedHatOrderRequest(BaseModel):
     systemd_unit: str | None = None
 
 
+class EmailListenerToggleRequest(BaseModel):
+    enabled: bool
+    poll_interval_sec: float | None = None
+    search_query: str | None = None
+    create_gmail_drafts: bool | None = None
+
+
 def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | None = None) -> FastAPI:
     cfg = config or GigaMeshConfig()
     if enable_autopilot is not None:
         cfg.autopoiesis_enabled_on_boot = enable_autopilot
+        cfg.email_listener_enabled_on_boot = enable_autopilot
 
     engine = GigaMeshEngine(cfg)
 
@@ -58,7 +66,10 @@ def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | No
     async def lifespan(_app: FastAPI):
         if cfg.autopoiesis_enabled_on_boot:
             engine.autopoiesis.start_autopilot()
+        if cfg.email_listener_enabled_on_boot:
+            engine.email_listener.start()
         yield
+        engine.email_listener.stop()
         engine.autopoiesis.stop_autopilot()
 
     app = FastAPI(
@@ -280,6 +291,42 @@ def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | No
             )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    # ------------------------------------------------------------------
+    # Event-Driven Email Security Vulnerability Listener Endpoints
+    # ------------------------------------------------------------------
+    @app.get("/api/email-listener/status")
+    def email_listener_status() -> dict[str, Any]:
+        return {
+            "status": engine.email_listener.status().model_dump(mode="json"),
+            "decisions": [d.model_dump(mode="json") for d in reversed(engine.email_listener.decisions[-40:])],
+        }
+
+    @app.post("/api/email-listener/toggle")
+    def email_listener_toggle(req: EmailListenerToggleRequest) -> dict[str, Any]:
+        if req.poll_interval_sec is not None and req.poll_interval_sec >= 5.0:
+            engine.email_listener.poll_interval_sec = req.poll_interval_sec
+        if req.search_query is not None and req.search_query.strip():
+            engine.email_listener.search_query = req.search_query.strip()
+        if req.create_gmail_drafts is not None:
+            engine.email_listener.create_gmail_drafts = req.create_gmail_drafts
+        if req.enabled:
+            engine.email_listener.start()
+        else:
+            engine.email_listener.stop()
+        return engine.email_listener.status().model_dump(mode="json")
+
+    @app.post("/api/email-listener/poll")
+    def email_listener_poll(max_messages: int = 5) -> dict[str, Any]:
+        decisions = engine.email_listener.poll_once(max_messages=max_messages)
+        return {
+            "new_decisions": [d.model_dump(mode="json") for d in decisions],
+            "status": engine.email_listener.status().model_dump(mode="json"),
+        }
+
+    @app.post("/api/email-listener/webhook")
+    def email_listener_webhook(payload: dict[str, Any]) -> dict[str, Any]:
+        return engine.email_listener.handle_webhook(payload)
 
     # ------------------------------------------------------------------
     # Live WebSocket Stream

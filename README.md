@@ -21,6 +21,7 @@ Every defensive option is exhaustively benchmarked across multi-attacker and ben
 | **Darwinian Autopoiesis** | `backend/gigamesh/evolution/` | Perpetual autonomous evolution loop: harvests ensnared artifacts → REA dissects → metabolizes → spawns recursive A/B trade-off forks → benchmarks every candidate → promotes strict winners & culls losers in perpetuity. |
 | **Human Security Hub** | `backend/gigamesh/human_sec/hub.py` | Collective analyst voting & rule synthesis, human-identity risk correlation (MFA/phishing/OAuth), cryptographic M-of-N HITL quorum gates, and signed STIX 2.1 federated motif exchange. |
 | **Active Control Plane** | `backend/gigamesh/control/` | Adaptive Deception Snare & forensic harvester, Dynamic MCP Policy Proxy & kill-switch, and Red-Hat Host Controller generating SELinux, `nftables`, `auditd`, `systemd`, and OpenShift `NetworkPolicy` containment artifacts. |
+| **Email Vulnerability Listener** | `backend/gigamesh/integrations/email_listener.py` | Event-driven Gmail History/PubSub listener triaging security disclosures through zero-trust prompt-injection detection first: ensnares & REA-dissects hostile emails, opens HITL Quorums for critical/contamination reports, synthesizes RHEL hardening orders, and prepares human-reviewable Markdown Gmail drafts (never auto-sends unattended). |
 
 ---
 

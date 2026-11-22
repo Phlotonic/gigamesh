@@ -96,6 +96,8 @@ class GigaMeshConfig:
         )
     )
     genome_sync_branch: str = "genome-sync"
+    email_listener_enabled_on_boot: bool = True
+    email_poll_interval_sec: float = 30.0
 
     @property
     def genome_repo_dir(self) -> Path:
@@ -108,6 +110,10 @@ class GigaMeshConfig:
     @property
     def sync_quarantine_dir(self) -> Path:
         return self.data_dir / "sync_quarantine"
+
+    @property
+    def email_state_path(self) -> Path:
+        return self.data_dir / "email_listener_state.json"
 
     @property
     def db_path(self) -> Path:
