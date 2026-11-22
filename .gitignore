@@ -1,0 +1,20 @@
+# Python environments & caches
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+
+# Frontend dependencies & build outputs
+frontend/node_modules/
+frontend/dist/
+
+# Runtime local state & isolated neural genome repo
+# Note: `genome_repo/` is intentionally excluded from `main` and synced
+# exclusively through GigaMesh's Mutual Sync Firewall (`genome-sync` branch).
+data/
+genome_repo/
+
+# OS & editor files
+.DS_Store
+*.log
