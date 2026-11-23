@@ -116,6 +116,8 @@ class GigaMeshConfig:
     aws_region: str = field(default_factory=lambda: os.environ.get("AWS_REGION", "us-east-1"))
     aws_toolkit_enabled: bool = True
     aws_toolkit_read_only: bool = True
+    mqtt_broker_host: str = field(default_factory=lambda: os.environ.get("GIGAMESH_MQTT_HOST", "mosquitto"))
+    mqtt_broker_port: int = field(default_factory=lambda: int(os.environ.get("GIGAMESH_MQTT_PORT", "8883")))
 
     @property
     def genome_repo_dir(self) -> Path:

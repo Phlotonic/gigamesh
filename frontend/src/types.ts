@@ -571,4 +571,83 @@ export interface AwsToolkitStatus {
   mcp_config: Record<string, unknown>;
 }
 
+export interface SafetyEnvelopeRule {
+  tag_path: string;
+  unit: string;
+  min_value: number | null;
+  max_value: number | null;
+  max_delta_per_sec: number | null;
+  safety_interlock_locked: boolean;
+  quorum_delta_threshold: number | null;
+  last_known_value: number | null;
+}
+
+export interface BirthCertificatePin {
+  node_key: string;
+  group_id: string;
+  edge_node_id: string;
+  device_id: string | null;
+  schema_sha256: string;
+  metric_names: string[];
+  tamper_alerts: number;
+  status: string;
+}
+
+export interface MqttInspectionVerdict {
+  verdict_id: string;
+  timestamp: string;
+  topic: string;
+  message_type: string;
+  edge_node_id: string;
+  device_id: string | null;
+  sender_id: string;
+  mode: string;
+  decision: string;
+  reasons: string[];
+  quorum_id: string | null;
+  ghost_plc_snare_id: string | null;
+  signature_verified: boolean;
+}
+
+export interface MqttOtStatus {
+  enabled: boolean;
+  broker_host: string;
+  broker_port: number;
+  tls_enabled: boolean;
+  observe_only_onboarding: boolean;
+  stats: Record<string, number>;
+  birth_pins: BirthCertificatePin[];
+  safety_envelopes: SafetyEnvelopeRule[];
+  recent_verdicts: MqttInspectionVerdict[];
+  ignition_turnkey: {
+    mqtt_server_url: string;
+    sparkplug_namespace: string;
+    perspective_hmi_embed_url: string;
+    cirrus_link_steps: string[];
+  };
+}
+
+export interface EdgeDeviceRecord {
+  device_id: string;
+  device_name: string;
+  platform: string;
+  site_or_plant: string;
+  edge_runtime: string;
+  capabilities: string[];
+  status: string;
+  policy_version: string;
+  blocked_threats_local: number;
+  vpn_shield_active: boolean;
+  biometric_key_registered: boolean;
+}
+
+export interface EdgeFleetStatus {
+  total_devices: number;
+  online_devices: number;
+  android_devices: number;
+  industrial_gateways: number;
+  devices: EdgeDeviceRecord[];
+}
+
+
 

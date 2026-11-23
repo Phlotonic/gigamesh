@@ -1,0 +1,206 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  GigaMesh Commercial SaaS & Enterprise Cloud Control Plane (AWS ECS Fargate + ALB + WAFv2 + RDS PostgreSQL + KMS S3).
+  Copyright (C) 2026 Adam Dryden and Quanumis Systems.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, staging, prod]
+  ContainerImage:
+    Type: String
+    Description: ECR URI for built GigaMesh container image (from Dockerfile)
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  PublicSubnets:
+    Type: List<AWS::EC2::Subnet::Id>
+  PrivateSubnets:
+    Type: List<AWS::EC2::Subnet::Id>
+  AllowedCorsOrigins:
+    Type: String
+    Default: https://app.gigamesh.io
+
+Resources:
+  GenomeBackupBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+
+  OperatorSecrets:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub gigamesh/${EnvironmentName}/secrets
+      Description: GigaMesh API Key, OT Command Signing Secret, and Edge Offline Bundle Secret
+      GenerateSecretString:
+        SecretStringTemplate: '{"GIGAMESH_API_KEY":"","GIGAMESH_OT_SIGNING_SECRET":""}'
+        GenerateStringKey: GIGAMESH_EDGE_BUNDLE_SECRET
+        PasswordLength: 48
+        ExcludePunctuation: true
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/gigamesh-${EnvironmentName}
+      RetentionInDays: 90
+
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub gigamesh-${EnvironmentName}
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: GigaMesh ALB Ingress
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  ServiceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: GigaMesh ECS Service (Least Privilege from ALB Only)
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: ReadGigaMeshSecrets
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [secretsmanager:GetSecretValue]
+                Resource: !Ref OperatorSecrets
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub gigamesh-${EnvironmentName}
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      Cpu: '1024'
+      Memory: '2048'
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: gigamesh
+          Image: !Ref ContainerImage
+          PortMappings:
+            - ContainerPort: 8000
+          ReadonlyRootFilesystem: false
+          Environment:
+            - Name: GIGAMESH_ALLOWED_ORIGINS
+              Value: !Ref AllowedCorsOrigins
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+          Secrets:
+            - Name: GIGAMESH_EDGE_BUNDLE_SECRET
+              ValueFrom: !Sub "${OperatorSecrets}:GIGAMESH_EDGE_BUNDLE_SECRET::"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: gigamesh
+
+  Alb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      SecurityGroups: [!Ref AlbSecurityGroup]
+      Subnets: !Ref PublicSubnets
+      Type: application
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VpcId
+      Port: 8000
+      Protocol: HTTP
+      TargetType: ip
+      HealthCheckPath: /api/overview
+      HealthCheckIntervalSeconds: 20
+
+  WafAcl:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Scope: REGIONAL
+      DefaultAction: { Allow: {} }
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub gigamesh-waf-${EnvironmentName}
+      Rules:
+        - Name: AWSManagedCommonRuleSet
+          Priority: 1
+          OverrideAction: { None: {} }
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedCommonRuleSet
+
+  WafAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Ref Alb
+      WebACLArn: !GetAtt WafAcl.Arn
+
+  Service:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref TaskDefinition
+      DesiredCount: 2
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets: !Ref PrivateSubnets
+          SecurityGroups: [!Ref ServiceSecurityGroup]
+      LoadBalancers:
+        - ContainerName: gigamesh
+          ContainerPort: 8000
+          TargetGroupArn: !Ref TargetGroup
+
+Outputs:
+  LoadBalancerDns:
+    Description: Public ALB DNS for GigaMesh SaaS Control Plane
+    Value: !GetAtt Alb.DNSName
+  GenomeBackupBucketName:
+    Description: KMS-encrypted S3 bucket for GigaMesh genome snapshots & REA artifacts
+    Value: !Ref GenomeBackupBucket

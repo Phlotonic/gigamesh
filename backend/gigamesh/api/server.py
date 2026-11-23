@@ -576,6 +576,71 @@ def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | No
         return engine.aws_toolkit.generate_mcp_config()
 
     # ------------------------------------------------------------------
+    # Industrial MQTT 5.0 / Sparkplug B / Ignition OT Middleware Endpoints
+    # ------------------------------------------------------------------
+    @app.get("/api/ot-mqtt/status")
+    def ot_mqtt_status() -> dict[str, Any]:
+        return engine.mqtt_ot.status()
+
+    @app.post("/api/ot-mqtt/inspect")
+    def ot_mqtt_inspect(payload: dict[str, Any]) -> dict[str, Any]:
+        from gigamesh.integrations.mqtt_ot_middleware import SparkplugPacketInput
+
+        try:
+            verdict = engine.mqtt_ot.inspect_packet(SparkplugPacketInput(**payload))
+            return verdict.model_dump(mode="json")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/ot-mqtt/envelopes")
+    def ot_mqtt_upsert_envelope(payload: dict[str, Any]) -> dict[str, Any]:
+        from gigamesh.integrations.mqtt_ot_middleware import SafetyEnvelopeRule
+
+        rule = engine.mqtt_ot.upsert_safety_envelope(SafetyEnvelopeRule(**payload))
+        return rule.model_dump(mode="json")
+
+    @app.post("/api/ot-mqtt/simulate-ignition")
+    def ot_mqtt_simulate_ignition() -> dict[str, Any]:
+        verdicts = engine.mqtt_ot.simulate_ignition_factory_scenario()
+        return {"verdicts": [v.model_dump(mode="json") for v in verdicts]}
+
+    # ------------------------------------------------------------------
+    # Edge Device Fleet (Android / iOS / Ignition / ARM64) & Offline Bundles
+    # ------------------------------------------------------------------
+    @app.get("/api/edge/fleet")
+    def edge_fleet_status() -> dict[str, Any]:
+        return engine.edge_fleet.status()
+
+    @app.post("/api/edge/enroll")
+    def edge_fleet_enroll(payload: dict[str, Any]) -> dict[str, Any]:
+        from gigamesh.integrations.edge_fleet import EdgeEnrollRequest
+
+        return engine.edge_fleet.enroll_device(EdgeEnrollRequest(**payload))
+
+    @app.post("/api/edge/heartbeat")
+    def edge_fleet_heartbeat(payload: dict[str, Any]) -> dict[str, Any]:
+        from gigamesh.integrations.edge_fleet import EdgeHeartbeatRequest
+
+        try:
+            dev = engine.edge_fleet.record_heartbeat(EdgeHeartbeatRequest(**payload))
+            return dev.model_dump(mode="json")
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=f"Unknown edge device: {exc}") from exc
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+    @app.post("/api/edge/devices/{device_id}/revoke")
+    def edge_fleet_revoke(device_id: str) -> dict[str, Any]:
+        try:
+            return engine.edge_fleet.revoke_device(device_id).model_dump(mode="json")
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=f"Unknown edge device {device_id}") from exc
+
+    @app.get("/api/edge/policy-bundle")
+    def edge_policy_bundle() -> dict[str, Any]:
+        return engine.edge_fleet.compile_signed_policy_bundle().model_dump(mode="json")
+
+    # ------------------------------------------------------------------
     # Live WebSocket Stream
     # ------------------------------------------------------------------
     @app.websocket("/ws/live")
@@ -600,10 +665,14 @@ def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | No
     if dist_dir.exists() and (dist_dir / "index.html").exists():
         app.mount("/assets", StaticFiles(directory=str(dist_dir / "assets")), name="assets")
 
+        allowed_root_files = {"manifest.webmanifest", "sw.js", "favicon.svg", "icons.svg"}
+
         @app.get("/{full_path:path}")
         def serve_spa(full_path: str):
             if full_path.startswith("api/") or full_path.startswith("ws/"):
                 raise HTTPException(status_code=404, detail="Not found")
+            if full_path in allowed_root_files and (dist_dir / full_path).is_file():
+                return FileResponse(str(dist_dir / full_path))
             return FileResponse(str(dist_dir / "index.html"))
 
     return app

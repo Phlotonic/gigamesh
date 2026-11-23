@@ -18,3 +18,7 @@ genome_repo/
 # OS & editor files
 .DS_Store
 *.log
+
+# Compiled Edge Binaries
+edge/rust/target/
+edge/go/gigamesh-edge-go

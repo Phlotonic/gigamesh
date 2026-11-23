@@ -1,0 +1,11 @@
+{
+  "name": "GigaMesh — AI & Industrial Security Shield",
+  "short_name": "GigaMesh",
+  "description": "Self-evolving edge-to-edge security for AI assistants, cloud workloads, Android devices, and Ignition industrial plants.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f5f1",
+  "theme_color": "#16684a",
+  "orientation": "any",
+  "categories": ["security", "utilities", "business"]
+}

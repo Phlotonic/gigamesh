@@ -19,6 +19,10 @@ import type {
   AwsSkillRecord,
   AwsToolkitStatus,
   CrawlRunReport,
+  EdgeDeviceRecord,
+  EdgeFleetStatus,
+  MqttInspectionVerdict,
+  MqttOtStatus,
   OwaspBenchmarkReport,
   ThreatCrawlerData,
   ThreatCrawlerStatus,
@@ -159,4 +163,22 @@ export const api = {
     }),
   simulateAwsAttackSequence: () =>
     request<{ ingested: AwsIngestedFinding[] }>('/api/aws-toolkit/simulate-attack-sequence', { method: 'POST' }),
+  getMqttOtStatus: () => request<MqttOtStatus>('/api/ot-mqtt/status'),
+  simulateIgnitionFactory: () =>
+    request<{ verdicts: MqttInspectionVerdict[] }>('/api/ot-mqtt/simulate-ignition', { method: 'POST' }),
+  getEdgeFleet: () => request<EdgeFleetStatus>('/api/edge/fleet'),
+  enrollEdgeDevice: (payload: {
+    device_name: string;
+    platform: string;
+    site_or_plant: string;
+    edge_runtime: string;
+    capabilities: string[];
+  }) =>
+    request<{ device: EdgeDeviceRecord; device_token_once: string }>('/api/edge/enroll', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  revokeEdgeDevice: (deviceId: string) =>
+    request<EdgeDeviceRecord>(`/api/edge/devices/${encodeURIComponent(deviceId)}/revoke`, { method: 'POST' }),
+  getEdgePolicyBundle: () => request<Record<string, unknown>>('/api/edge/policy-bundle'),
 };

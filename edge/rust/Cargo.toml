@@ -1,0 +1,12 @@
+[package]
+name = "gigamesh-edge-rust"
+version = "0.1.0"
+edition = "2021"
+description = "GigaMesh Edge Data-Plane Agent (Rust Candidate) - Copyright (C) 2026 Adam Dryden and Quanumis Systems"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

@@ -1,0 +1,70 @@
+# GigaMesh Turn-Key Industrial / Enterprise On-Prem Stack
+# Copyright (C) 2026 Adam Dryden and Quanumis Systems.
+# Usage: docker compose up --build -d
+services:
+  gigamesh:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gigamesh-control-plane
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      GIGAMESH_ALLOWED_ORIGINS: "http://localhost:8000,http://127.0.0.1:8000"
+      GIGAMESH_MQTT_HOST: "mosquitto"
+      GIGAMESH_MQTT_PORT: "1883"
+      AWS_REGION: "${AWS_REGION:-us-east-1}"
+      # Set GIGAMESH_API_KEY in .env for production bearer-token enforcement
+      GIGAMESH_API_KEY: "${GIGAMESH_API_KEY:-}"
+      GIGAMESH_OT_SIGNING_SECRET: "${GIGAMESH_OT_SIGNING_SECRET:-change-me-in-production}"
+      GIGAMESH_EDGE_BUNDLE_SECRET: "${GIGAMESH_EDGE_BUNDLE_SECRET:-change-me-in-production}"
+      DATABASE_URL: "postgresql://gigamesh:${POSTGRES_PASSWORD:-gigamesh-dev-only}@postgres:5432/gigamesh"
+    volumes:
+      - gigamesh_data:/app/data
+      - gigamesh_genome:/app/genome_repo
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/overview', timeout=3)"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: gigamesh-mqtt-broker
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "8883:8883"
+    volumes:
+      - ./deploy/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: gigamesh-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gigamesh
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-gigamesh-dev-only}"
+      POSTGRES_DB: gigamesh
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gigamesh"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  gigamesh_data:
+  gigamesh_genome:
+  mosquitto_data:
+  postgres_data:

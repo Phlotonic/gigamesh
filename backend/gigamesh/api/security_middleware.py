@@ -79,9 +79,15 @@ class SecurityHardeningMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _apply_security_headers(response: Any, path: str, limit: int, remaining: int) -> Any:
-        response.headers["Content-Security-Policy"] = DEFAULT_CSP
+        is_hmi_embed = path == "/embed/hmi" or path.startswith("/embed/hmi/")
+        response.headers["Content-Security-Policy"] = (
+            DEFAULT_CSP.replace("frame-ancestors 'none'", "frame-ancestors 'self' https:")
+            if is_hmi_embed
+            else DEFAULT_CSP
+        )
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
+        if not is_hmi_embed:
+            response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"

@@ -248,6 +248,19 @@ export const GLOSSARY = {
     title: 'Prioritized AWS Findings & Redaction',
     body: 'GuardDuty Attack Sequences (multi-step attacks) and Security Hub Exposures always appear at the top. AWS account numbers, keys, and emails are automatically masked.',
   },
+  mqttOtMiddleware: {
+    title: 'Industrial MQTT / Ignition Security Middleware',
+    body: 'Sits seamlessly in front of Ignition and Sparkplug B MQTT brokers. Sensor data flows without delay, while equipment write commands (NCMD/DCMD) must pass cryptographic and physical safety checks.',
+    why: 'Protects factory machinery from hijacked AI copilots, spoofed PLCs, and unsafe setpoint changes without slowing down plant visibility.',
+  },
+  physicsEnvelope: {
+    title: 'Digital Physics Safety Envelopes',
+    body: 'Hard safety limits on factory tags (minimum, maximum, maximum speed of change, and locked safety interlocks). Even a compromised account cannot push a boiler or turbine outside safe physical bounds.',
+  },
+  edgeFleet: {
+    title: 'Android & Factory Edge Fleet',
+    body: 'Every enrolled Android phone and Rust-powered factory gateway downloads a signed offline rule bundle, keeping protection active even if the internet goes down.',
+  },
 } as const satisfies Record<string, GlossaryEntry>;
 
 export type GlossaryKey = keyof typeof GLOSSARY;

@@ -5,6 +5,8 @@ import { EmailTriagePanel } from './components/EmailTriagePanel';
 import { HelpTip } from './components/HelpTip';
 import { HumanGovernanceHub } from './components/HumanGovernanceHub';
 import { NeuralForkDag } from './components/NeuralForkDag';
+import { NoviceModeView } from './components/NoviceModeView';
+import { OtEdgeFleetPanel } from './components/OtEdgeFleetPanel';
 import { OwaspBenchmarkPanel } from './components/OwaspBenchmarkPanel';
 import { ProvenanceGraph } from './components/ProvenanceGraph';
 import { ReaMetabolismLab } from './components/ReaMetabolismLab';
@@ -14,6 +16,7 @@ import type {
   AwsToolkitStatus,
   CrawlFinding,
   CrawlRunReport,
+  EdgeFleetStatus,
   EmailListenerStatus,
   EmailTriageDecision,
   EvolutionGenerationReport,
@@ -21,6 +24,7 @@ import type {
   HumanHubData,
   IncidentCase,
   MetabolizedDefenseModule,
+  MqttOtStatus,
   OverviewResponse,
   OwaspBenchmarkReport,
   ProvenanceSnapshot,
@@ -31,9 +35,11 @@ import type {
   ThreatCrawlerStatus,
 } from './types';
 
-type TabId = 'neural' | 'provenance' | 'rea' | 'human' | 'redhat' | 'email' | 'crawler' | 'owasp' | 'aws';
+type TabId = 'neural' | 'provenance' | 'rea' | 'human' | 'redhat' | 'email' | 'crawler' | 'owasp' | 'aws' | 'ot';
 
 export default function App() {
+  const isHmiEmbed = typeof window !== 'undefined' && window.location.pathname.startsWith('/embed/hmi');
+  const [viewMode, setViewMode] = useState<'novice' | 'expert'>('novice');
   const [tab, setTab] = useState<TabId>('neural');
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [forks, setForks] = useState<ForkGenome[]>([]);
@@ -69,6 +75,8 @@ export default function App() {
   const [crawlerRuns, setCrawlerRuns] = useState<CrawlRunReport[]>([]);
   const [owaspReport, setOwaspReport] = useState<OwaspBenchmarkReport | null>(null);
   const [awsStatus, setAwsStatus] = useState<AwsToolkitStatus | null>(null);
+  const [otStatus, setOtStatus] = useState<MqttOtStatus | null>(null);
+  const [edgeFleet, setEdgeFleet] = useState<EdgeFleetStatus | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -79,7 +87,7 @@ export default function App() {
 
   const refreshAll = useCallback(async () => {
     try {
-      const [ov, fk, ev, pv, inc, scn, rea, hu, rh, sy, em, cr, ow, aw] = await Promise.all([
+      const [ov, fk, ev, pv, inc, scn, rea, hu, rh, sy, em, cr, ow, aw, ot, fl] = await Promise.all([
         api.getOverview(),
         api.getForks(useCaseFilter || undefined),
         api.getEvolutionReports(),
@@ -94,6 +102,8 @@ export default function App() {
         api.getThreatCrawler(),
         api.getOwaspBenchmark(),
         api.getAwsToolkit(),
+        api.getMqttOtStatus(),
+        api.getEdgeFleet(),
       ]);
       setOverview(ov);
       setForks(fk.forks);
@@ -117,6 +127,8 @@ export default function App() {
       setCrawlerRuns(cr.recent_runs);
       setOwaspReport(ow);
       setAwsStatus(aw);
+      setOtStatus(ot);
+      setEdgeFleet(fl);
       setSelectedFork((prev) => {
         if (prev) {
           const updated = fk.forks.find((f) => f.fork_id === prev.fork_id);
@@ -190,60 +202,184 @@ export default function App() {
 
   const integrity = overview?.neural_repo_integrity;
 
+  // Compact turn-key Ignition Perspective HMI Embed View (/embed/hmi)
+  if (isHmiEmbed) {
+    const pendingQ = humanHub.quorums.filter((q) => q.status === 'pending');
+    return (
+      <div style={{ padding: 14, background: 'var(--bg-canvas)', minHeight: '100vh' }}>
+        <div className="gm-panel">
+          <div className="gm-panel-header">
+            <h2 style={{ margin: 0 }}>GigaMesh Industrial Shield · Ignition HMI Widget</h2>
+            <span className="gm-tag champion">PROTECTED · OWASP {owaspReport?.passed_probes ?? 30}/30</span>
+          </div>
+          <div className="gm-panel-body gm-list-stack">
+            <div className="gm-region-chips">
+              <span className="gm-tag champion">Telemetry: FAIL-OPEN PASSIVE</span>
+              <span className="gm-tag rea">Commands: FAIL-CLOSED SIGNED</span>
+              <span className="gm-tag">Pinned PLCs: {otStatus?.birth_pins.length ?? 0}</span>
+              <span className="gm-tag critical">Blocked Writes: {otStatus?.stats.commands_blocked ?? 0}</span>
+              <span className="gm-tag pending">Pending Approvals: {pendingQ.length}</span>
+            </div>
+            {pendingQ.slice(0, 3).map((q) => (
+              <div className="gm-item-box" key={q.quorum_id}>
+                <div className="gm-row-between">
+                  <span style={{ fontSize: 12 }}>{q.summary}</span>
+                  <button
+                    type="button"
+                    className="gm-btn gm-btn-emerald"
+                    onClick={async () => {
+                      await api.signQuorum(q.quorum_id, {
+                        analyst_id: 'plant-hmi-operator',
+                        decision: 'approve',
+                        comment: 'Ignition HMI',
+                      });
+                      await refreshAll();
+                    }}
+                  >
+                    Approve
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="gm-shell">
       <header className="gm-header">
         <div className="gm-brand">
           <h1>GigaMesh</h1>
-          <span className="gm-subtitle">Non-Linear Self-Evolving Agentic SIEM · Git Neural Repo · REA Metabolism</span>
+          <span className="gm-subtitle">
+            {viewMode === 'novice'
+              ? 'Simple AI, Android & Factory Security Shield'
+              : 'Non-Linear Self-Evolving Agentic & Industrial OT SIEM · Git Neural Repo · REA Metabolism'}
+          </span>
         </div>
 
         <div className="gm-header-controls">
-          <HelpTip term="merkleRepo">
-            <span className={`gm-status-chip ${integrity?.valid ? 'ok' : 'danger'}`}>
-              Merkle Repo: {integrity?.valid ? 'VERIFIED' : 'TAMPERED'} ({integrity?.total_git_commits ?? 0} commits)
-            </span>
-          </HelpTip>
-          <HelpTip term="autopoiesis">
-            <span className={`gm-status-chip ${overview?.autopilot_running ? 'ok' : 'warn'}`}>
-              Autopoiesis: {overview?.autopilot_running ? `PERPETUAL (${overview.autopilot_interval_sec}s)` : 'PAUSED'} · Gen #{overview?.generation_counter ?? 0}
-            </span>
-          </HelpTip>
-          <HelpTip term="threatCrawler">
-            <button
-              id="chip-threat-crawler"
-              type="button"
-              className={`gm-status-chip ${crawlerStatus?.enabled ? 'ok' : 'warn'}`}
-              style={{ cursor: 'pointer' }}
-              onClick={() => setTab('crawler')}
-            >
-              Threat Crawler: {crawlerStatus?.enabled ? 'ON' : 'OFF'} ({crawlerStatus?.total_findings ?? 0} intel)
-            </button>
-          </HelpTip>
-          <HelpTip term="toggleAutopilot">
-            <button
-              id="btn-toggle-autopilot"
-              type="button"
-              className="gm-btn"
-              onClick={handleToggleAutopilot}
-            >
-              {overview?.autopilot_running ? 'Pause Perpetual Loop' : 'Resume Perpetual Loop'}
-            </button>
-          </HelpTip>
-          <HelpTip term="stepEvolution">
-            <button
-              id="btn-step-evolution"
-              type="button"
-              className="gm-btn gm-btn-primary"
-              disabled={busyAction !== null}
-              onClick={handleStepEvolution}
-            >
-              {busyAction === 'evolving' ? 'Benchmarking Forks…' : 'Evolve Next Generation'}
-            </button>
-          </HelpTip>
+          <label className="gm-switch small" title="Switch between calm plain-English Novice View and full Expert SOC Console">
+            <input
+              id="toggle-view-mode"
+              type="checkbox"
+              checked={viewMode === 'expert'}
+              onChange={(e) => setViewMode(e.target.checked ? 'expert' : 'novice')}
+            />
+            <span className="gm-switch-track" />
+            <span>{viewMode === 'expert' ? 'Expert SOC' : 'Simple Mode'}</span>
+          </label>
+          {viewMode === 'expert' && (
+            <>
+              <HelpTip term="merkleRepo">
+                <span className={`gm-status-chip ${integrity?.valid ? 'ok' : 'danger'}`}>
+                  Merkle Repo: {integrity?.valid ? 'VERIFIED' : 'TAMPERED'} ({integrity?.total_git_commits ?? 0} commits)
+                </span>
+              </HelpTip>
+              <HelpTip term="autopoiesis">
+                <span className={`gm-status-chip ${overview?.autopilot_running ? 'ok' : 'warn'}`}>
+                  Autopoiesis: {overview?.autopilot_running ? `PERPETUAL (${overview.autopilot_interval_sec}s)` : 'PAUSED'} · Gen #{overview?.generation_counter ?? 0}
+                </span>
+              </HelpTip>
+              <HelpTip term="threatCrawler">
+                <button
+                  id="chip-threat-crawler"
+                  type="button"
+                  className={`gm-status-chip ${crawlerStatus?.enabled ? 'ok' : 'warn'}`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setTab('crawler')}
+                >
+                  Threat Crawler: {crawlerStatus?.enabled ? 'ON' : 'OFF'} ({crawlerStatus?.total_findings ?? 0} intel)
+                </button>
+              </HelpTip>
+              <HelpTip term="toggleAutopilot">
+                <button
+                  id="btn-toggle-autopilot"
+                  type="button"
+                  className="gm-btn"
+                  onClick={handleToggleAutopilot}
+                >
+                  {overview?.autopilot_running ? 'Pause Perpetual Loop' : 'Resume Perpetual Loop'}
+                </button>
+              </HelpTip>
+              <HelpTip term="stepEvolution">
+                <button
+                  id="btn-step-evolution"
+                  type="button"
+                  className="gm-btn gm-btn-primary"
+                  disabled={busyAction !== null}
+                  onClick={handleStepEvolution}
+                >
+                  {busyAction === 'evolving' ? 'Benchmarking Forks…' : 'Evolve Next Generation'}
+                </button>
+              </HelpTip>
+            </>
+          )}
         </div>
       </header>
 
+      {viewMode === 'novice' ? (
+        <main className="gm-main">
+          <NoviceModeView
+            overview={overview}
+            humanHub={humanHub}
+            incidents={incidents}
+            crawlerStatus={crawlerStatus}
+            owaspReport={owaspReport}
+            otStatus={otStatus}
+            fleet={edgeFleet}
+            busy={busyAction !== null}
+            onToggleAutopilot={handleToggleAutopilot}
+            onToggleCrawler={async (enabled) => {
+              setBusyAction('crawler_toggle');
+              try {
+                await api.toggleThreatCrawler(enabled);
+                notify(enabled ? 'Global Threat Intelligence Crawler ON' : 'Global Threat Intelligence Crawler OFF');
+                await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onScanCrawler={async () => {
+              setBusyAction('crawler_scan');
+              try {
+                const rep = await api.scanThreatCrawler();
+                notify(`Checked 10 global feeds: ${rep.new_findings_count} new item(s), ${rep.sources_unchanged} unchanged`);
+                await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onApproveQuorum={async (quorumId, decision) => {
+              setBusyAction(`q_${quorumId}`);
+              try {
+                const res = await api.signQuorum(quorumId, {
+                  analyst_id: 'admin-novice-console',
+                  decision,
+                  comment: '1-click console decision',
+                });
+                notify(`Decision recorded (${String(res.status)})`);
+                await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onSimulateIgnition={async () => {
+              setBusyAction('ot_sim');
+              try {
+                const res = await api.simulateIgnitionFactory();
+                notify(`Tested Ignition protection: ${res.verdicts.length} Sparkplug B checks completed`);
+                await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onSwitchToExpert={() => setViewMode('expert')}
+          />
+        </main>
+      ) : (
+      <>
       <nav className="gm-nav" aria-label="GigaMesh Command Views">
         {(
           [
@@ -256,6 +392,7 @@ export default function App() {
             ['crawler', `Global Threat Crawler (${crawlerStatus?.enabled ? 'ON' : 'OFF'} · ${crawlerStatus?.total_findings ?? 0})`],
             ['owasp', `OWASP Top 10 Benchmark (${owaspReport ? `${owaspReport.passed_probes}/${owaspReport.total_probes}` : '30'})`],
             ['aws', `AWS Agent Toolkit (${awsStatus?.counts.pinned_tools ?? 0} MCP · ${awsStatus?.counts.findings ?? 0})`],
+            ['ot', `Industrial OT / Edge Fleet (${edgeFleet?.total_devices ?? 0})`],
           ] as [TabId, string][]
         ).map(([id, label]) => (
           <button
@@ -974,7 +1111,54 @@ export default function App() {
             }}
           />
         )}
+
+        {/* TAB 10: INDUSTRIAL OT / MQTT SPARKPLUG B / IGNITION & EDGE FLEET */}
+        {tab === 'ot' && (
+          <OtEdgeFleetPanel
+            otStatus={otStatus}
+            fleet={edgeFleet}
+            busy={busyAction !== null}
+            onSimulateIgnition={async () => {
+              setBusyAction('ot_sim');
+              try {
+                const res = await api.simulateIgnitionFactory();
+                notify(`Ignition Sparkplug B test: ${res.verdicts.length} frames verified (AI crossover diverted to Ghost PLC!)`);
+                await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onEnrollDevice={async (payload) => {
+              setBusyAction('edge_enroll');
+              try {
+                const res = await api.enrollEdgeDevice(payload);
+                notify(`Enrolled ${res.device.device_name} (${res.device.platform})`);
+                await refreshAll();
+                return res.device_token_once;
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onRevokeDevice={async (deviceId) => {
+              setBusyAction(`edge_rev_${deviceId}`);
+              try {
+                await api.revokeEdgeDevice(deviceId);
+                notify(`Revoked edge device ${deviceId}`);
+                await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onFetchBundle={async () => {
+              const b = await api.getEdgePolicyBundle();
+              notify(`Compiled HMAC-signed offline edge policy bundle (${String(b.bundle_version)})`);
+              return b;
+            }}
+          />
+        )}
       </main>
+      </>
+      )}
 
       {toast && <div className="gm-toast" role="status">{toast}</div>}
     </div>

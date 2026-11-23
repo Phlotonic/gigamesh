@@ -21,7 +21,9 @@ from gigamesh.evolution.autopoiesis import AutopoiesisEngine
 from gigamesh.evolution.evaluator import OptionEvaluator
 from gigamesh.human_sec.hub import HumanSecurityHub
 from gigamesh.integrations.aws_toolkit import AwsAgentToolkitBridge
+from gigamesh.integrations.edge_fleet import EdgeFleetManager
 from gigamesh.integrations.email_listener import EmailSecurityListener
+from gigamesh.integrations.mqtt_ot_middleware import MqttOtSecurityMiddleware
 from gigamesh.integrations.threat_crawler import ThreatIntelCrawler
 from gigamesh.models.asef import AsefEvent, IncidentCase, Severity
 from gigamesh.models.governance import AnalystVote, FederatedStixBundle
@@ -105,6 +107,12 @@ class GigaMeshEngine:
             region=self.config.aws_region,
             read_only_enforced=self.config.aws_toolkit_read_only,
         )
+        self.mqtt_ot = MqttOtSecurityMiddleware(
+            engine=self,
+            broker_host=self.config.mqtt_broker_host,
+            broker_port=self.config.mqtt_broker_port,
+        )
+        self.edge_fleet = EdgeFleetManager(engine=self)
 
     # ------------------------------------------------------------------
     # Real-time WebSocket Pub/Sub
@@ -580,5 +588,16 @@ class GigaMeshEngine:
                 "mcp_status": self.aws_toolkit.last_mcp_status,
                 "pinned_tools": len(self.aws_toolkit.pinned_tools),
                 "findings": len(self.aws_toolkit.findings),
+            },
+            "mqtt_ot": {
+                "enabled": self.mqtt_ot.enabled,
+                "broker": f"{self.mqtt_ot.broker_host}:{self.mqtt_ot.broker_port}",
+                "pinned_nodes": len(self.mqtt_ot.birth_pins),
+                "safety_envelopes": len(self.mqtt_ot.safety_envelopes),
+                "commands_blocked": self.mqtt_ot.stats["commands_blocked"],
+            },
+            "edge_fleet": {
+                "total_devices": len(self.edge_fleet.devices),
+                "online_devices": sum(1 for d in self.edge_fleet.devices.values() if d.status == "online"),
             },
         }
