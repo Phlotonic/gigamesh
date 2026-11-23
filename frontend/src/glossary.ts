@@ -261,6 +261,23 @@ export const GLOSSARY = {
     title: 'Android & Factory Edge Fleet',
     body: 'Every enrolled Android phone and Rust-powered factory gateway downloads a signed offline rule bundle, keeping protection active even if the internet goes down.',
   },
+  unifiedNamespace: {
+    title: 'Unified Namespace (ISA-95 Live Enterprise Tree)',
+    body: 'Organizes every plant, production line, machine, cloud account, and mobile device into one clean folder-like tree (Company / Plant / Area / Line / Cell / Machine) so every system speaks the same language.',
+    why: 'Eliminates messy point-to-point integrations while letting GigaMesh protect OT, Cloud, AI, and Mobile from one single source of truth.',
+  },
+  unsWildcardPolicy: {
+    title: 'Hierarchical Wildcard Policies (+ and #)',
+    body: 'Attach a safety rule once at the Company, Plant, or Area level using MQTT wildcards (+ matches one level, # matches every level below). Child machines inherit parent rules automatically and can only make limits stricter—never weaker.',
+  },
+  unsSecurityTwin: {
+    title: 'UNS Security Digital Twin',
+    body: 'GigaMesh publishes live shield status, blocked commands, and pending approvals right back into your Unified Namespace (.../Security/GigaMesh/...) so Ignition HMIs, MES, and ERP dashboards display real-time security state automatically.',
+  },
+  unsSiteLockdown: {
+    title: '1-Click Plant Read-Only Lockdown',
+    body: 'Instantly freezes all remote equipment write commands across an entire factory (both ISA-95 UNS and Sparkplug B) while keeping sensor telemetry flowing and leaving other factories completely unaffected.',
+  },
 } as const satisfies Record<string, GlossaryEntry>;
 
 export type GlossaryKey = keyof typeof GLOSSARY;

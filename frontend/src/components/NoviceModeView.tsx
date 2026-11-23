@@ -7,6 +7,7 @@ import type {
   OverviewResponse,
   OwaspBenchmarkReport,
   ThreatCrawlerStatus,
+  UnsStatus,
 } from '../types';
 import { HelpTip } from './HelpTip';
 
@@ -18,12 +19,14 @@ interface Props {
   owaspReport: OwaspBenchmarkReport | null;
   otStatus: MqttOtStatus | null;
   fleet: EdgeFleetStatus | null;
+  uns: UnsStatus | null;
   busy: boolean;
   onToggleAutopilot: () => Promise<void>;
   onToggleCrawler: (enabled: boolean) => Promise<void>;
   onScanCrawler: () => Promise<void>;
   onApproveQuorum: (quorumId: string, decision: 'approve' | 'reject') => Promise<void>;
   onSimulateIgnition: () => Promise<void>;
+  onToggleSiteLockdown: (site: string, locked: boolean) => Promise<void>;
   onSwitchToExpert: () => void;
 }
 
@@ -37,12 +40,14 @@ export function NoviceModeView({
   owaspReport,
   otStatus,
   fleet,
+  uns,
   busy,
   onToggleAutopilot,
   onToggleCrawler,
   onScanCrawler,
   onApproveQuorum,
   onSimulateIgnition,
+  onToggleSiteLockdown,
   onSwitchToExpert,
 }: Props) {
   const [subTab, setSubTab] = useState<NoviceTab>('home');
@@ -52,6 +57,7 @@ export function NoviceModeView({
     : 0;
   const blockedTotal =
     incidents.length + (otStatus?.stats.commands_blocked ?? 0) + (crawlerStatus?.poisoned_pages_blocked ?? 0);
+  const plantSites = (uns?.sites ?? []).filter((s) => s !== 'Cloud');
 
   return (
     <div className="gm-list-stack" style={{ maxWidth: 1080, margin: '0 auto' }}>
@@ -95,11 +101,16 @@ export function NoviceModeView({
                       OWASP Top 10: {owaspReport.passed_probes}/{owaspReport.total_probes} Verified
                     </span>
                   )}
+                  {uns && (
+                    <span className="gm-tag">
+                      Unified Namespace: {uns.total_nodes} Live Assets
+                    </span>
+                  )}
                 </div>
                 <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 22 }}>You’re Protected</h2>
                 <p>
                   GigaMesh is quietly guarding your AI assistants, Android devices, AWS cloud, and Ignition factory
-                  equipment — automatically upgrading your shield whenever a new trick appears.
+                  equipment inside one Unified Namespace — automatically upgrading your shield whenever a new trick appears.
                 </p>
               </div>
               <label className="gm-switch">
@@ -206,9 +217,54 @@ export function NoviceModeView({
         </div>
       )}
 
-      {/* TAB 2: PLANTS & DEVICES (ANDROID + IGNITION + EDGE) */}
+      {/* TAB 2: PLANTS & DEVICES (UNIFIED NAMESPACE + ANDROID + IGNITION + EDGE) */}
       {subTab === 'devices' && (
         <div className="gm-list-stack">
+          {/* 1-Click Plant Safe Mode (Unified Namespace Lockdown) */}
+          <div className="gm-panel">
+            <div className="gm-panel-header">
+              <h2 className="gm-heading-tip">
+                Your Factories — 1-Click Read-Only Safe Mode
+                <HelpTip term="unsSiteLockdown" />
+              </h2>
+              <span className="gm-tag rea">{uns?.enterprise ?? 'QuanumisCorp'} Unified Map</span>
+            </div>
+            <div className="gm-panel-body gm-list-stack">
+              <p className="gm-muted" style={{ margin: 0 }}>
+                Need to freeze remote machine changes at one factory during maintenance or an alert? Flip that plant to
+                Read-Only Safe Mode — live gauges and dashboards keep updating while remote commands are blocked.
+              </p>
+              <div className="gm-region-chips" style={{ gap: 12 }}>
+                {plantSites.map((site) => {
+                  const pat = `${uns?.enterprise ?? 'QuanumisCorp'}/${site}/#`;
+                  const isLocked = Boolean(uns?.active_lockdowns.includes(pat));
+                  return (
+                    <div
+                      key={site}
+                      className="gm-item-box"
+                      style={{ flex: '1 1 280px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}
+                    >
+                      <div>
+                        <strong style={{ fontSize: 13.5 }}>{site}</strong>
+                        <div className="gm-muted" style={{ fontSize: 11.5 }}>
+                          {isLocked ? 'Remote commands frozen · Sensors live' : 'Protected & operating normally'}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className={`gm-btn ${isLocked ? 'gm-btn-crimson' : 'gm-btn-emerald'}`}
+                        disabled={busy}
+                        onClick={() => onToggleSiteLockdown(site, !isLocked)}
+                      >
+                        {isLocked ? '🔒 Frozen (Resume)' : 'Freeze Commands'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
           <div className="gm-panel">
             <div className="gm-panel-header">
               <h2 className="gm-heading-tip">

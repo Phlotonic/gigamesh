@@ -116,7 +116,38 @@ fn to_hex(bytes: &[u8]) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// Sparkplug B + Digital Physics Safety Envelope Engine
+// Zero-Allocation MQTT 5.0 Wildcard Matcher (`+` single-level, `#` multi-level)
+// ---------------------------------------------------------------------------
+fn mqtt_topic_matches(pattern: &str, topic: &str) -> bool {
+    let mut p_iter = pattern.split('/').filter(|s| !s.is_empty());
+    let mut t_iter = topic.split('/').filter(|s| !s.is_empty());
+    loop {
+        match (p_iter.next(), t_iter.next()) {
+            (Some("#"), _) => return p_iter.next().is_none(),
+            (Some("+"), Some(_)) => continue,
+            (Some(p), Some(t)) if p == t => continue,
+            (None, None) => return true,
+            _ => return false,
+        }
+    }
+}
+
+fn is_uns_command_topic(topic: &str) -> bool {
+    for seg in topic.split('/') {
+        if seg.eq_ignore_ascii_case("Commands")
+            || seg.eq_ignore_ascii_case("Command")
+            || seg.eq_ignore_ascii_case("CMD")
+            || seg.eq_ignore_ascii_case("Setpoints")
+            || seg.eq_ignore_ascii_case("Control")
+        {
+            return true;
+        }
+    }
+    false
+}
+
+// ---------------------------------------------------------------------------
+// Dual-Mode Sparkplug B + ISA-95 Unified Namespace (S-UNS) Policy Engine
 // ---------------------------------------------------------------------------
 struct Envelope {
     min_val: f64,
@@ -127,10 +158,24 @@ struct Envelope {
     has_last: bool,
 }
 
+struct UnsPolicy {
+    pattern: String,
+    enabled: bool,
+    require_e2e_sig: bool,
+    block_ai_tainted: bool,
+    read_only_lockdown: bool,
+    interlock_lock: bool,
+    min_val: Option<f64>,
+    max_val: Option<f64>,
+    max_delta_per_sec: Option<f64>,
+}
+
 struct EdgeEngine {
     secret: Vec<u8>,
     birth_pins: HashMap<String, [u8; 32]>,
     envelopes: HashMap<String, Envelope>,
+    uns_policies: Vec<UnsPolicy>,
+    uns_last_vals: HashMap<String, f64>,
     seen_nonces: HashSet<String>,
 }
 
@@ -149,12 +194,94 @@ impl EdgeEngine {
             "Line3/ConveyorSpeedRPM".to_string(),
             Envelope { min_val: 0.0, max_val: 180.0, max_delta_per_sec: 35.0, interlock_lock: false, last_val: 110.0, has_last: true },
         );
+
+        let uns_policies = vec![
+            UnsPolicy {
+                pattern: "QuanumisCorp/+/+/+/+/+/Commands/#".to_string(),
+                enabled: true,
+                require_e2e_sig: true,
+                block_ai_tainted: true,
+                read_only_lockdown: false,
+                interlock_lock: false,
+                min_val: None,
+                max_val: None,
+                max_delta_per_sec: None,
+            },
+            UnsPolicy {
+                pattern: "QuanumisCorp/+/+/+/+/+/Commands/EmergencyReliefInterlock".to_string(),
+                enabled: true,
+                require_e2e_sig: true,
+                block_ai_tainted: true,
+                read_only_lockdown: false,
+                interlock_lock: true,
+                min_val: None,
+                max_val: None,
+                max_delta_per_sec: None,
+            },
+            UnsPolicy {
+                pattern: "QuanumisCorp/AustinPlant/ThermalArea/+/+/+/Commands/PressureSetpointPSI".to_string(),
+                enabled: true,
+                require_e2e_sig: false,
+                block_ai_tainted: false,
+                read_only_lockdown: false,
+                interlock_lock: false,
+                min_val: Some(15.0),
+                max_val: Some(145.0),
+                max_delta_per_sec: Some(12.0),
+            },
+            UnsPolicy {
+                pattern: "QuanumisCorp/MunichPlant/AssemblyArea/+/+/+/Commands/ConveyorSpeedRPM".to_string(),
+                enabled: true,
+                require_e2e_sig: false,
+                block_ai_tainted: false,
+                read_only_lockdown: false,
+                interlock_lock: false,
+                min_val: Some(0.0),
+                max_val: Some(160.0),
+                max_delta_per_sec: Some(30.0),
+            },
+        ];
+
+        let mut uns_last_vals = HashMap::with_capacity(256);
+        uns_last_vals.insert(
+            "QuanumisCorp/AustinPlant/ThermalArea/Line3/BoilerCell/BoilerPLC01/Telemetry/PressureSetpointPSI".to_string(),
+            95.0,
+        );
+        uns_last_vals.insert(
+            "QuanumisCorp/MunichPlant/AssemblyArea/Line1/RobotCell/RobotCell04/Telemetry/ConveyorSpeedRPM".to_string(),
+            120.0,
+        );
+
         Self {
             secret: secret.to_vec(),
             birth_pins: HashMap::with_capacity(256),
             envelopes,
+            uns_policies,
+            uns_last_vals,
             seen_nonces: HashSet::with_capacity(131072),
         }
+    }
+
+    fn set_site_lockdown(&mut self, enterprise: &str, site: &str, locked: bool) {
+        let pat = format!("{}/{}/#", enterprise, site);
+        for p in &mut self.uns_policies {
+            if p.pattern == pat {
+                p.enabled = locked;
+                p.read_only_lockdown = locked;
+                return;
+            }
+        }
+        self.uns_policies.push(UnsPolicy {
+            pattern: pat,
+            enabled: locked,
+            require_e2e_sig: false,
+            block_ai_tainted: false,
+            read_only_lockdown: locked,
+            interlock_lock: false,
+            min_val: None,
+            max_val: None,
+            max_delta_per_sec: None,
+        });
     }
 
     fn sign_command(&self, topic: &str, sender: &str, nonce: &str, metric: &str, val: f64) -> [u8; 32] {
@@ -164,6 +291,81 @@ impl EdgeEngine {
 
     // 0 = allow, 1 = allow_with_alert, 2 = block
     fn inspect(&mut self, topic: &str, sender: &str, nonce: &str, metric: &str, val: f64, sig: &[u8; 32], ai_tainted: bool) -> u8 {
+        if topic.starts_with("spBv1.0/") {
+            return self.inspect_sparkplug(topic, sender, nonce, metric, val, sig, ai_tainted);
+        }
+        self.inspect_uns(topic, sender, nonce, metric, val, sig, ai_tainted)
+    }
+
+    fn inspect_uns(&mut self, topic: &str, sender: &str, nonce: &str, metric: &str, val: f64, sig: &[u8; 32], ai_tainted: bool) -> u8 {
+        if !is_uns_command_topic(topic) {
+            // Fail-open passive telemetry/state update
+            self.uns_last_vals.insert(topic.to_string(), val);
+            return 0;
+        }
+
+        // Monotonic strictest-wins wildcard policy resolution (Enterprise -> Site -> Area -> Asset)
+        let mut req_sig = false;
+        let mut block_ai = false;
+        let mut lockdown = false;
+        let mut interlock = false;
+        let mut min_v: Option<f64> = None;
+        let mut max_v: Option<f64> = None;
+        let mut max_d: Option<f64> = None;
+
+        for p in &self.uns_policies {
+            if !p.enabled || !mqtt_topic_matches(&p.pattern, topic) {
+                continue;
+            }
+            req_sig |= p.require_e2e_sig;
+            block_ai |= p.block_ai_tainted;
+            lockdown |= p.read_only_lockdown;
+            interlock |= p.interlock_lock;
+            if let Some(mn) = p.min_val {
+                min_v = Some(match min_v { Some(cur) => cur.max(mn), None => mn });
+            }
+            if let Some(mx) = p.max_val {
+                max_v = Some(match max_v { Some(cur) => cur.min(mx), None => mx });
+            }
+            if let Some(md) = p.max_delta_per_sec {
+                max_d = Some(match max_d { Some(cur) => cur.min(md), None => md });
+            }
+        }
+
+        if lockdown || interlock {
+            return 2;
+        }
+        if block_ai && ai_tainted {
+            return 2;
+        }
+        if req_sig {
+            let expected = self.sign_command(topic, sender, nonce, metric, val);
+            if !ct_eq(sig, &expected) {
+                return 2;
+            }
+            if !self.seen_nonces.insert(nonce.to_string()) {
+                return 2;
+            }
+        }
+        if let Some(mn) = min_v {
+            if val < mn { return 2; }
+        }
+        if let Some(mx) = max_v {
+            if val > mx { return 2; }
+        }
+        if let Some(md) = max_d {
+            let sibling = topic.replace("/Commands/", "/Telemetry/");
+            if let Some(&prev) = self.uns_last_vals.get(&sibling).or_else(|| self.uns_last_vals.get(topic)) {
+                if (val - prev).abs() > md {
+                    return 2;
+                }
+            }
+        }
+        self.uns_last_vals.insert(topic.to_string(), val);
+        0
+    }
+
+    fn inspect_sparkplug(&mut self, topic: &str, sender: &str, nonce: &str, metric: &str, val: f64, sig: &[u8; 32], ai_tainted: bool) -> u8 {
         let mut parts = topic.split('/');
         let ns = match parts.next() { Some(v) => v, None => return 2 };
         let group = match parts.next() { Some(v) => v, None => return 2 };
@@ -199,6 +401,15 @@ impl EdgeEngine {
         if msg_type != "NCMD" && msg_type != "DCMD" {
             return 2;
         }
+        // Check mapped UNS site lockdown if PlantAustin -> AustinPlant
+        let mapped_site = if group == "PlantAustin" { "AustinPlant" } else if group == "PlantMunich" { "MunichPlant" } else { group };
+        let probe_uns = format!("QuanumisCorp/{}/EdgeArea/{}/Cell0/{}/Commands/{}", mapped_site, edge_node, device.unwrap_or(edge_node), metric);
+        for p in &self.uns_policies {
+            if p.enabled && p.read_only_lockdown && mqtt_topic_matches(&p.pattern, &probe_uns) {
+                return 2;
+            }
+        }
+
         if ai_tainted {
             return 2;
         }
@@ -243,11 +454,52 @@ fn verify_bundle_file(path: &str, secret: &[u8]) -> Result<(), String> {
     let ver = extract_json_str(&raw, "bundle_version").ok_or("missing bundle_version")?;
     let sha = extract_json_str(&raw, "bundle_sha256").ok_or("missing bundle_sha256")?;
     let sig = extract_json_str(&raw, "signature").ok_or("missing signature")?;
+    let ent = extract_json_str(&raw, "uns_enterprise").unwrap_or("QuanumisCorp");
     let expected = to_hex(&hmac_sha256(secret, sha.as_bytes()));
     if !ct_eq(sig.as_bytes(), expected.as_bytes()) {
         return Err("invalid bundle signature".to_string());
     }
-    println!("VERIFIED offline bundle {} (sha256={})", ver, &sha[..sha.len().min(12)]);
+    println!(
+        "VERIFIED offline bundle {} (enterprise={}, sha256={})",
+        ver,
+        ent,
+        &sha[..sha.len().min(12)]
+    );
+    Ok(())
+}
+
+fn run_uns_selftest(secret: &[u8]) -> Result<(), String> {
+    if !mqtt_topic_matches("QuanumisCorp/+/+/+/+/+/Commands/#", "QuanumisCorp/MunichPlant/AssemblyArea/Line1/RobotCell/RobotCell04/Commands/ConveyorSpeedRPM") {
+        return Err("wildcard +/# match failed".to_string());
+    }
+    if mqtt_topic_matches("QuanumisCorp/AustinPlant/#", "QuanumisCorp/MunichPlant/AssemblyArea/Line1/RobotCell/RobotCell04/Commands/ConveyorSpeedRPM") {
+        return Err("site wildcard leaked across sites".to_string());
+    }
+    let mut eng = EdgeEngine::new(secret);
+    let zero = [0u8; 32];
+    let t_munich = "QuanumisCorp/MunichPlant/AssemblyArea/Line1/RobotCell/RobotCell04/Commands/ConveyorSpeedRPM";
+    let t_austin = "QuanumisCorp/AustinPlant/ThermalArea/Line3/BoilerCell/BoilerPLC01/Commands/PressureSetpointPSI";
+
+    // AI tainted write to Munich -> blocked by Enterprise wildcard policy
+    if eng.inspect(t_munich, "ai-copilot", "n-ai", "ConveyorSpeedRPM", 125.0, &zero, true) != 2 {
+        return Err("AI tainted UNS command was not blocked".to_string());
+    }
+    // Safe signed write to Austin -> allowed
+    let sig_ok = eng.sign_command(t_austin, "eng-android", "n-ok1", "PressureSetpointPSI", 102.0);
+    if eng.inspect(t_austin, "eng-android", "n-ok1", "PressureSetpointPSI", 102.0, &sig_ok, false) != 0 {
+        return Err("valid signed UNS command was rejected".to_string());
+    }
+    // Enable 1-click AustinPlant Read-Only Lockdown -> Austin blocked, Munich still allowed!
+    eng.set_site_lockdown("QuanumisCorp", "AustinPlant", true);
+    let sig_locked = eng.sign_command(t_austin, "eng-android", "n-ok2", "PressureSetpointPSI", 103.0);
+    if eng.inspect(t_austin, "eng-android", "n-ok2", "PressureSetpointPSI", 103.0, &sig_locked, false) != 2 {
+        return Err("Austin lockdown failed to block Austin command".to_string());
+    }
+    let sig_m = eng.sign_command(t_munich, "munich-eng", "n-m1", "ConveyorSpeedRPM", 130.0);
+    if eng.inspect(t_munich, "munich-eng", "n-m1", "ConveyorSpeedRPM", 130.0, &sig_m, false) != 0 {
+        return Err("Austin lockdown erroneously blocked Munich".to_string());
+    }
+    println!("UNS_SELFTEST_PASSED dual_mode=sparkplug_b+isa95_uns wildcards=+/# lockdown=isolated");
     Ok(())
 }
 
@@ -260,6 +512,12 @@ fn main() {
     while i < args.len() {
         if args[i] == "--verify-bundle" && i + 1 < args.len() {
             if let Err(e) = verify_bundle_file(&args[i + 1], secret) {
+                eprintln!("ERR: {}", e);
+                std::process::exit(1);
+            }
+            return;
+        } else if args[i] == "--test-uns" {
+            if let Err(e) = run_uns_selftest(secret) {
                 eprintln!("ERR: {}", e);
                 std::process::exit(1);
             }
@@ -278,23 +536,33 @@ fn main() {
 
     eng.inspect("spBv1.0/PlantAustin/DBIRTH/Edge01/Boiler01", "edge01", "", "Boiler/PressureSetpointPSI", 95.0, &zero_sig, false);
 
+    let uns_telem = "QuanumisCorp/MunichPlant/AssemblyArea/Line1/RobotCell/RobotCell04/Telemetry/ConveyorSpeedRPM";
+    let uns_cmd = "QuanumisCorp/MunichPlant/AssemblyArea/Line1/RobotCell/RobotCell04/Commands/ConveyorSpeedRPM";
+
     let start_all = Instant::now();
     for idx in 0..bench_n {
         let t0 = Instant::now();
-        let res = match idx % 5 {
-            0 | 1 => eng.inspect("spBv1.0/PlantAustin/DDATA/Edge01/Boiler01", "edge01", "", "Boiler/PressureSetpointPSI", 95.0 + (idx % 5) as f64, &zero_sig, false),
+        let res = match idx % 6 {
+            0 => eng.inspect("spBv1.0/PlantAustin/DDATA/Edge01/Boiler01", "edge01", "", "Boiler/PressureSetpointPSI", 95.0 + (idx % 5) as f64, &zero_sig, false),
+            1 => eng.inspect(uns_telem, "munich-edge", "", "ConveyorSpeedRPM", 118.0 + (idx % 5) as f64, &zero_sig, false),
             2 => {
-                let nonce = format!("n-{}", idx);
+                let nonce = format!("sp-{}", idx);
                 let val = 96.0 + (idx % 4) as f64;
                 let sig = eng.sign_command("spBv1.0/PlantAustin/DCMD/Edge01/Boiler01", "eng-android", &nonce, "Boiler/PressureSetpointPSI", val);
                 eng.inspect("spBv1.0/PlantAustin/DCMD/Edge01/Boiler01", "eng-android", &nonce, "Boiler/PressureSetpointPSI", val, &sig, false)
             }
             3 => {
-                let nonce = format!("atk-{}", idx);
-                let sig = eng.sign_command("spBv1.0/PlantAustin/DCMD/Edge01/Boiler01", "compromised-hmi", &nonce, "Boiler/PressureSetpointPSI", 260.0);
-                eng.inspect("spBv1.0/PlantAustin/DCMD/Edge01/Boiler01", "compromised-hmi", &nonce, "Boiler/PressureSetpointPSI", 260.0, &sig, false)
+                let nonce = format!("uns-{}", idx);
+                let val = 122.0 + (idx % 4) as f64;
+                let sig = eng.sign_command(uns_cmd, "munich-eng", &nonce, "ConveyorSpeedRPM", val);
+                eng.inspect(uns_cmd, "munich-eng", &nonce, "ConveyorSpeedRPM", val, &sig, false)
             }
-            _ => eng.inspect("spBv1.0/PlantAustin/DCMD/Edge01/Boiler01", "ai-copilot", "ai-n", "Boiler/PressureSetpointPSI", 100.0, &zero_sig, true),
+            4 => {
+                let nonce = format!("atk-{}", idx);
+                let sig = eng.sign_command(uns_cmd, "compromised-hmi", &nonce, "ConveyorSpeedRPM", 260.0);
+                eng.inspect(uns_cmd, "compromised-hmi", &nonce, "ConveyorSpeedRPM", 260.0, &sig, false)
+            }
+            _ => eng.inspect(uns_cmd, "ai-copilot", "ai-n", "ConveyorSpeedRPM", 125.0, &zero_sig, true),
         };
         latencies.push(t0.elapsed().as_nanos());
         match res {
@@ -314,7 +582,7 @@ fn main() {
     let elapsed_ms = (elapsed.as_micros() as f64) / 1000.0;
 
     println!(
-        "{{\"runtime\":\"rust\",\"messages\":{},\"elapsed_ms\":{:.3},\"throughput\":{:.0},\"p50_ns\":{},\"p95_ns\":{},\"p99_ns\":{},\"p999_ns\":{},\"allowed\":{},\"alerts\":{},\"blocked\":{}}}",
+        "{{\"runtime\":\"rust-dual-uns\",\"messages\":{},\"elapsed_ms\":{:.3},\"throughput\":{:.0},\"p50_ns\":{},\"p95_ns\":{},\"p99_ns\":{},\"p999_ns\":{},\"allowed\":{},\"alerts\":{},\"blocked\":{}}}",
         bench_n, elapsed_ms, tps, p50, p95, p99, p999, allowed, alerts, blocked
     );
 }

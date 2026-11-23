@@ -27,6 +27,9 @@ import type {
   ThreatCrawlerData,
   ThreatCrawlerStatus,
   ThreatSource,
+  UnsPolicyRule,
+  UnsPublishVerdict,
+  UnsStatus,
 } from './types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -181,4 +184,20 @@ export const api = {
   revokeEdgeDevice: (deviceId: string) =>
     request<EdgeDeviceRecord>(`/api/edge/devices/${encodeURIComponent(deviceId)}/revoke`, { method: 'POST' }),
   getEdgePolicyBundle: () => request<Record<string, unknown>>('/api/edge/policy-bundle'),
+  getUnsStatus: () => request<UnsStatus>('/api/uns/status'),
+  simulateEnterpriseUns: () =>
+    request<{ verdicts: UnsPublishVerdict[] }>('/api/uns/simulate-enterprise', { method: 'POST' }),
+  toggleUnsSiteLockdown: (site: string, locked: boolean) =>
+    request<{ site: string; locked: boolean; active_lockdowns: string[] }>(
+      `/api/uns/sites/${encodeURIComponent(site)}/lockdown`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ locked }),
+      }
+    ),
+  upsertUnsPolicy: (payload: Partial<UnsPolicyRule> & { name: string; topic_pattern: string }) =>
+    request<UnsPolicyRule>('/api/uns/policies', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 };

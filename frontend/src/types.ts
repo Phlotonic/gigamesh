@@ -622,6 +622,8 @@ export interface MqttOtStatus {
   ignition_turnkey: {
     mqtt_server_url: string;
     sparkplug_namespace: string;
+    uns_namespace?: string;
+    uns_security_twin_namespace?: string;
     perspective_hmi_embed_url: string;
     cirrus_link_steps: string[];
   };
@@ -647,6 +649,84 @@ export interface EdgeFleetStatus {
   android_devices: number;
   industrial_gateways: number;
   devices: EdgeDeviceRecord[];
+}
+
+export interface UnsPolicyRule {
+  policy_id: string;
+  name: string;
+  topic_pattern: string;
+  scope_level: string;
+  enabled: boolean;
+  require_e2e_signature: boolean;
+  block_ai_tainted: boolean;
+  read_only_lockdown: boolean;
+  safety_interlock_locked: boolean;
+  min_value: number | null;
+  max_value: number | null;
+  max_delta_per_sec: number | null;
+  quorum_delta_threshold: number | null;
+  unit: string;
+  description: string;
+}
+
+export interface UnsNodeState {
+  topic: string;
+  enterprise: string;
+  site: string;
+  area: string;
+  line: string;
+  cell: string;
+  asset: string;
+  layer: string;
+  metric: string;
+  value: unknown;
+  datatype: string;
+  source_protocol: string;
+  last_sender: string;
+  updated_at: string;
+  security_state: string;
+  matched_policies: string[];
+}
+
+export interface UnsTreeNode {
+  name: string;
+  path: string;
+  children: UnsTreeNode[];
+  leaves: UnsNodeState[];
+}
+
+export interface UnsPublishVerdict {
+  verdict_id: string;
+  timestamp: string;
+  topic: string;
+  layer: string;
+  mode: string;
+  decision: string;
+  matched_policies: string[];
+  reasons: string[];
+  quorum_id: string | null;
+  ghost_plc_snare_id: string | null;
+  security_twin_topic: string | null;
+}
+
+export interface UnsSecurityTwinEvent {
+  timestamp: string;
+  topic: string;
+  payload: Record<string, unknown>;
+  retained: boolean;
+}
+
+export interface UnsStatus {
+  enterprise: string;
+  sites: string[];
+  total_nodes: number;
+  total_policies: number;
+  active_lockdowns: string[];
+  policies: UnsPolicyRule[];
+  sparkplug_to_uns_map: Record<string, string>;
+  recent_verdicts: UnsPublishVerdict[];
+  security_twin_feed: UnsSecurityTwinEvent[];
+  tree: UnsTreeNode;
 }
 
 

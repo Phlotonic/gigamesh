@@ -12,6 +12,7 @@ import { ProvenanceGraph } from './components/ProvenanceGraph';
 import { ReaMetabolismLab } from './components/ReaMetabolismLab';
 import { RedHatControlPanel } from './components/RedHatControlPanel';
 import { ThreatCrawlerPanel } from './components/ThreatCrawlerPanel';
+import { UnsExplorerPanel } from './components/UnsExplorerPanel';
 import type {
   AwsToolkitStatus,
   CrawlFinding,
@@ -33,9 +34,10 @@ import type {
   ScenarioMeta,
   SyncFirewallStatus,
   ThreatCrawlerStatus,
+  UnsStatus,
 } from './types';
 
-type TabId = 'neural' | 'provenance' | 'rea' | 'human' | 'redhat' | 'email' | 'crawler' | 'owasp' | 'aws' | 'ot';
+type TabId = 'neural' | 'provenance' | 'rea' | 'human' | 'redhat' | 'email' | 'crawler' | 'owasp' | 'aws' | 'ot' | 'uns';
 
 export default function App() {
   const isHmiEmbed = typeof window !== 'undefined' && window.location.pathname.startsWith('/embed/hmi');
@@ -77,6 +79,7 @@ export default function App() {
   const [awsStatus, setAwsStatus] = useState<AwsToolkitStatus | null>(null);
   const [otStatus, setOtStatus] = useState<MqttOtStatus | null>(null);
   const [edgeFleet, setEdgeFleet] = useState<EdgeFleetStatus | null>(null);
+  const [unsStatus, setUnsStatus] = useState<UnsStatus | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -87,7 +90,7 @@ export default function App() {
 
   const refreshAll = useCallback(async () => {
     try {
-      const [ov, fk, ev, pv, inc, scn, rea, hu, rh, sy, em, cr, ow, aw, ot, fl] = await Promise.all([
+      const [ov, fk, ev, pv, inc, scn, rea, hu, rh, sy, em, cr, ow, aw, ot, fl, un] = await Promise.all([
         api.getOverview(),
         api.getForks(useCaseFilter || undefined),
         api.getEvolutionReports(),
@@ -104,6 +107,7 @@ export default function App() {
         api.getAwsToolkit(),
         api.getMqttOtStatus(),
         api.getEdgeFleet(),
+        api.getUnsStatus(),
       ]);
       setOverview(ov);
       setForks(fk.forks);
@@ -129,6 +133,7 @@ export default function App() {
       setAwsStatus(aw);
       setOtStatus(ot);
       setEdgeFleet(fl);
+      setUnsStatus(un);
       setSelectedFork((prev) => {
         if (prev) {
           const updated = fk.forks.find((f) => f.fork_id === prev.fork_id);
@@ -216,6 +221,7 @@ export default function App() {
             <div className="gm-region-chips">
               <span className="gm-tag champion">Telemetry: FAIL-OPEN PASSIVE</span>
               <span className="gm-tag rea">Commands: FAIL-CLOSED SIGNED</span>
+              <span className="gm-tag">UNS: {unsStatus?.enterprise ?? 'QuanumisCorp'} ({unsStatus?.total_nodes ?? 0} nodes)</span>
               <span className="gm-tag">Pinned PLCs: {otStatus?.birth_pins.length ?? 0}</span>
               <span className="gm-tag critical">Blocked Writes: {otStatus?.stats.commands_blocked ?? 0}</span>
               <span className="gm-tag pending">Pending Approvals: {pendingQ.length}</span>
@@ -329,6 +335,7 @@ export default function App() {
             owaspReport={owaspReport}
             otStatus={otStatus}
             fleet={edgeFleet}
+            uns={unsStatus}
             busy={busyAction !== null}
             onToggleAutopilot={handleToggleAutopilot}
             onToggleCrawler={async (enabled) => {
@@ -375,6 +382,16 @@ export default function App() {
                 setBusyAction(null);
               }
             }}
+            onToggleSiteLockdown={async (site, locked) => {
+              setBusyAction(`uns_lock_${site}`);
+              try {
+                await api.toggleUnsSiteLockdown(site, locked);
+                notify(locked ? `Read-Only Safe Mode ENGAGED for ${site} (telemetry flowing)` : `${site} resumed normal operation`);
+                await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
+            }}
             onSwitchToExpert={() => setViewMode('expert')}
           />
         </main>
@@ -393,6 +410,7 @@ export default function App() {
             ['owasp', `OWASP Top 10 Benchmark (${owaspReport ? `${owaspReport.passed_probes}/${owaspReport.total_probes}` : '30'})`],
             ['aws', `AWS Agent Toolkit (${awsStatus?.counts.pinned_tools ?? 0} MCP · ${awsStatus?.counts.findings ?? 0})`],
             ['ot', `Industrial OT / Edge Fleet (${edgeFleet?.total_devices ?? 0})`],
+            ['uns', `Unified Namespace · UNS (${unsStatus?.total_nodes ?? 0})`],
           ] as [TabId, string][]
         ).map(([id, label]) => (
           <button
@@ -1153,6 +1171,48 @@ export default function App() {
               const b = await api.getEdgePolicyBundle();
               notify(`Compiled HMAC-signed offline edge policy bundle (${String(b.bundle_version)})`);
               return b;
+            }}
+          />
+        )}
+
+        {/* TAB 11: SECURITY-FIRST UNIFIED NAMESPACE (S-UNS) */}
+        {tab === 'uns' && (
+          <UnsExplorerPanel
+            uns={unsStatus}
+            busy={busyAction !== null}
+            onSimulateEnterprise={async () => {
+              setBusyAction('uns_sim');
+              try {
+                const res = await api.simulateEnterpriseUns();
+                notify(`Simulated Multi-Plant UNS: ${res.verdicts.length} hierarchical ISA-95 checks completed`);
+                await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onToggleSiteLockdown={async (site, locked) => {
+              setBusyAction(`uns_lock_${site}`);
+              try {
+                await api.toggleUnsSiteLockdown(site, locked);
+                notify(
+                  locked
+                    ? `1-Click Site Read-Only Lockdown ENGAGED for ${site} (telemetry flowing)`
+                    : `Released Site Read-Only Lockdown for ${site}`
+                );
+                await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onAddPolicy={async (policy) => {
+              setBusyAction('uns_policy');
+              try {
+                const p = await api.upsertUnsPolicy(policy);
+                notify(`Attached UNS wildcard policy "${p.name}" on ${p.topic_pattern}`);
+                await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
             }}
           />
         )}

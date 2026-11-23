@@ -25,6 +25,7 @@ from gigamesh.integrations.edge_fleet import EdgeFleetManager
 from gigamesh.integrations.email_listener import EmailSecurityListener
 from gigamesh.integrations.mqtt_ot_middleware import MqttOtSecurityMiddleware
 from gigamesh.integrations.threat_crawler import ThreatIntelCrawler
+from gigamesh.integrations.uns import UnifiedNamespaceHub
 from gigamesh.models.asef import AsefEvent, IncidentCase, Severity
 from gigamesh.models.governance import AnalystVote, FederatedStixBundle
 from gigamesh.models.neural_repo import EvolutionGenerationReport
@@ -106,6 +107,10 @@ class GigaMeshEngine:
             enabled=self.config.aws_toolkit_enabled,
             region=self.config.aws_region,
             read_only_enforced=self.config.aws_toolkit_read_only,
+        )
+        self.uns = UnifiedNamespaceHub(
+            engine=self,
+            enterprise=self.config.uns_enterprise_name,
         )
         self.mqtt_ot = MqttOtSecurityMiddleware(
             engine=self,
@@ -599,5 +604,14 @@ class GigaMeshEngine:
             "edge_fleet": {
                 "total_devices": len(self.edge_fleet.devices),
                 "online_devices": sum(1 for d in self.edge_fleet.devices.values() if d.status == "online"),
+            },
+            "uns": {
+                "enterprise": self.uns.enterprise,
+                "sites": sorted({n.site for n in self.uns.nodes.values()}),
+                "total_nodes": len(self.uns.nodes),
+                "total_policies": len(self.uns.policies),
+                "active_lockdowns": [
+                    p.topic_pattern for p in self.uns.policies.values() if p.enabled and p.read_only_lockdown
+                ],
             },
         }

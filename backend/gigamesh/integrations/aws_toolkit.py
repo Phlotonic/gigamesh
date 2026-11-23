@@ -612,6 +612,21 @@ class AwsAgentToolkitBridge:
         self.findings.append(rec)
         # Keep findings sorted by official aws-security priority: AttackSequence -> Exposure -> Severity -> Newest
         self.findings.sort(key=lambda f: (f.priority_bucket, -f.ingested_at.timestamp()))
+        if hasattr(self.engine, "uns"):
+            from gigamesh.integrations.uns import UnsMessageInput
+
+            safe_ft = "".join(c if c.isalnum() or c in ("-", "_", ".") else "_" for c in finding.finding_type)[:60]
+            uns_topic = f"{self.engine.uns.enterprise}/Cloud/AWS/{finding.region}/{finding.service}/Security/{safe_ft}"
+            self.engine.uns.publish_uns_message(
+                UnsMessageInput(
+                    topic=uns_topic,
+                    value=f"{finding.severity}:{finding.title[:60]}",
+                    datatype="String",
+                    sender_id=f"aws-{finding.service}",
+                    sender_role="gigamesh_security",
+                ),
+                source_protocol="aws_toolkit",
+            )
         self.engine.broadcast("aws_toolkit_updated", {"event": "finding_ingested", "record_id": rec.record_id})
         return rec
 

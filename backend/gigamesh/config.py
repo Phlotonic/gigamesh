@@ -118,6 +118,9 @@ class GigaMeshConfig:
     aws_toolkit_read_only: bool = True
     mqtt_broker_host: str = field(default_factory=lambda: os.environ.get("GIGAMESH_MQTT_HOST", "mosquitto"))
     mqtt_broker_port: int = field(default_factory=lambda: int(os.environ.get("GIGAMESH_MQTT_PORT", "8883")))
+    uns_enterprise_name: str = field(
+        default_factory=lambda: os.environ.get("GIGAMESH_UNS_ENTERPRISE", "QuanumisCorp")
+    )
 
     @property
     def genome_repo_dir(self) -> Path:

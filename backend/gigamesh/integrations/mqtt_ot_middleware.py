@@ -327,7 +327,7 @@ class MqttOtSecurityMiddleware:
                     env.last_known_value = float(m.value)
                     env.last_updated_at = now
 
-        return self._record_verdict(
+        verdict = self._record_verdict(
             MqttInspectionVerdict(
                 topic=pkt.topic,
                 group_id=group_id,
@@ -341,6 +341,18 @@ class MqttOtSecurityMiddleware:
                 incident_id=incident_id,
             )
         )
+        if hasattr(self.engine, "uns"):
+            self.engine.uns.project_sparkplug_event(
+                group_id=group_id,
+                msg_type=msg_type,
+                edge_node_id=edge_node_id,
+                device_id=device_id,
+                sender_id=pkt.sender_id,
+                metrics=[m.model_dump() for m in pkt.metrics],
+                decision=verdict.decision,
+                reasons=verdict.reasons,
+            )
+        return verdict
 
     def _inspect_command_inline(
         self,
@@ -351,12 +363,56 @@ class MqttOtSecurityMiddleware:
         device_id: str | None,
         node_key: str,
     ) -> MqttInspectionVerdict:
-        """Fail-Closed inline actuation gate: Taint -> Cryptographic Sig -> Replay -> Digital Physics -> Quorum."""
+        """Fail-Closed inline actuation gate: UNS Lockdown -> Taint -> Crypto Sig -> Replay -> Digital Physics -> Quorum."""
         reasons: list[str] = []
         sig_ok = False
         quorum_id: str | None = None
         incident_id: str | None = None
         ghost_snare_id: str | None = None
+
+        def _finish(v: MqttInspectionVerdict) -> MqttInspectionVerdict:
+            recorded = self._record_verdict(v)
+            if hasattr(self.engine, "uns"):
+                self.engine.uns.project_sparkplug_event(
+                    group_id=group_id,
+                    msg_type=msg_type,
+                    edge_node_id=edge_node_id,
+                    device_id=device_id,
+                    sender_id=pkt.sender_id,
+                    metrics=[m.model_dump() for m in pkt.metrics],
+                    decision=recorded.decision,
+                    reasons=recorded.reasons,
+                )
+            return recorded
+
+        # 0. Unified Namespace Site / Branch Read-Only Lockdown Enforcement
+        if hasattr(self.engine, "uns"):
+            uns_prefix = self.engine.uns.map_sparkplug_to_uns_prefix(group_id, edge_node_id, device_id)
+            _, branch_eff = self.engine.uns.resolve_effective_policies(f"{uns_prefix}/Commands/Check")
+            if branch_eff.get("read_only_lockdown"):
+                reasons.append("uns_site_read_only_lockdown_active")
+                with self._lock:
+                    self.stats["commands_blocked"] += 1
+                self.engine.security_audit_log.record(
+                    category="owasp_block",
+                    severity="high",
+                    actor=pkt.sender_id,
+                    summary=f"UNS Site Read-Only Lockdown blocked Sparkplug {msg_type} on {node_key}",
+                    details={"uns_prefix": uns_prefix, "topic": pkt.topic},
+                )
+                return _finish(
+                    MqttInspectionVerdict(
+                        topic=pkt.topic,
+                        group_id=group_id,
+                        message_type=msg_type,
+                        edge_node_id=edge_node_id,
+                        device_id=device_id,
+                        sender_id=pkt.sender_id,
+                        mode="inline_fail_closed",
+                        decision="block",
+                        reasons=reasons,
+                    )
+                )
 
         # 1. IT-to-OT AI Crossover Barrier (untrusted IT agent / tainted trace cannot write to PLCs)
         trace_tainted = False
@@ -374,7 +430,7 @@ class MqttOtSecurityMiddleware:
                 self.stats["commands_blocked"] += 1
                 self.stats["ghost_plc_diversions"] += 1
             ghost_snare_id, incident_id = self._divert_to_ghost_plc(pkt, node_key, reasons)
-            return self._record_verdict(
+            return _finish(
                 MqttInspectionVerdict(
                     topic=pkt.topic,
                     group_id=group_id,
@@ -402,7 +458,7 @@ class MqttOtSecurityMiddleware:
                 self.stats["commands_blocked"] += 1
                 self.stats["ghost_plc_diversions"] += 1
             ghost_snare_id, incident_id = self._divert_to_ghost_plc(pkt, node_key, reasons)
-            return self._record_verdict(
+            return _finish(
                 MqttInspectionVerdict(
                     topic=pkt.topic,
                     group_id=group_id,
@@ -423,7 +479,7 @@ class MqttOtSecurityMiddleware:
             if pkt.nonce in self._seen_nonces:
                 reasons.append(f"replayed_command_nonce:{pkt.nonce}")
                 self.stats["commands_blocked"] += 1
-                return self._record_verdict(
+                return _finish(
                     MqttInspectionVerdict(
                         topic=pkt.topic,
                         group_id=group_id,
@@ -486,7 +542,7 @@ class MqttOtSecurityMiddleware:
                 summary=f"Digital Physics Envelope blocked unsafe OT {msg_type} on {node_key}",
                 details={"violations": physics_violations, "topic": pkt.topic},
             )
-            return self._record_verdict(
+            return _finish(
                 MqttInspectionVerdict(
                     topic=pkt.topic,
                     group_id=group_id,
@@ -512,7 +568,7 @@ class MqttOtSecurityMiddleware:
             quorum_id = q.quorum_id
             with self._lock:
                 self.stats["commands_quorum_gated"] += 1
-            return self._record_verdict(
+            return _finish(
                 MqttInspectionVerdict(
                     topic=pkt.topic,
                     group_id=group_id,
@@ -537,7 +593,7 @@ class MqttOtSecurityMiddleware:
                     env.last_known_value = float(m.value)
                     env.last_updated_at = now
 
-        return self._record_verdict(
+        return _finish(
             MqttInspectionVerdict(
                 topic=pkt.topic,
                 group_id=group_id,
@@ -657,17 +713,20 @@ class MqttOtSecurityMiddleware:
 
     def ignition_turnkey_config(self) -> dict[str, Any]:
         """Turn-key drop-in configuration for Inductive Automation Ignition & Cirrus Link MQTT modules."""
+        ent = self.engine.uns.enterprise if hasattr(self.engine, "uns") else "QuanumisCorp"
         return {
-            "integration_mode": "drop_in_mqtt_sparkplug_b_middleware",
+            "integration_mode": "dual_mode_sparkplug_b_and_isa95_uns_middleware",
             "zero_ignition_plugin_required": True,
             "mqtt_server_url": f"{'ssl' if self.tls_enabled else 'tcp'}://{self.broker_host}:{self.broker_port}",
             "sparkplug_namespace": "spBv1.0/#",
+            "uns_namespace": f"{ent}/#",
+            "uns_security_twin_namespace": f"{ent}/+/Security/GigaMesh/#",
             "perspective_hmi_embed_url": "/embed/hmi",
             "cirrus_link_steps": [
                 "1. In Ignition Gateway → Config → MQTT Engine / MQTT Transmission → Servers, point Server URL to GigaMesh's mTLS proxy on port 8883.",
-                "2. Keep 'Observe-Only Onboarding' enabled for 5 minutes so GigaMesh auto-pins every NBIRTH/DBIRTH device schema.",
-                "3. Review auto-discovered PLC tags, confirm Digital Physics min/max limits, and toggle Protection ON.",
-                "4. Optional: Drop an Ignition Perspective IFrame component pointing to /embed/hmi for live shield status inside your plant HMI.",
+                f"2. Subscribe MQTT Engine to both `spBv1.0/#` AND `{ent}/#` (ISA-95 Unified Namespace) for automatic dual-mode projection.",
+                f"3. Bind Ignition Perspective alarm banners directly to `{ent}/+/Security/GigaMesh/#` for live Security Digital Twin status.",
+                "4. Optional: Drop an Ignition Perspective IFrame component pointing to /embed/hmi for live shield & 1-click site lockdown controls.",
             ],
         }
 

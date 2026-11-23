@@ -641,6 +641,50 @@ def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | No
         return engine.edge_fleet.compile_signed_policy_bundle().model_dump(mode="json")
 
     # ------------------------------------------------------------------
+    # Security-First Unified Namespace (S-UNS) — ISA-95 + Sparkplug B
+    # ------------------------------------------------------------------
+    @app.get("/api/uns/status")
+    def uns_status() -> dict[str, Any]:
+        return engine.uns.status()
+
+    @app.get("/api/uns/tree")
+    def uns_tree() -> dict[str, Any]:
+        return engine.uns.build_tree()
+
+    @app.post("/api/uns/publish")
+    def uns_publish(payload: dict[str, Any]) -> dict[str, Any]:
+        from gigamesh.integrations.uns import UnsMessageInput
+
+        try:
+            verdict = engine.uns.publish_uns_message(UnsMessageInput(**payload))
+            return verdict.model_dump(mode="json")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/uns/policies")
+    def uns_upsert_policy(payload: dict[str, Any]) -> dict[str, Any]:
+        from gigamesh.integrations.uns import UnsPolicyRule
+
+        rule = engine.uns.upsert_policy(UnsPolicyRule(**payload))
+        return rule.model_dump(mode="json")
+
+    @app.post("/api/uns/sites/{site}/lockdown")
+    def uns_site_lockdown(site: str, payload: dict[str, Any]) -> dict[str, Any]:
+        locked = bool(payload.get("locked", True))
+        rule = engine.uns.set_site_read_only_lockdown(site, locked)
+        return {
+            "site": site,
+            "locked": locked,
+            "policy": rule.model_dump(mode="json"),
+            "active_lockdowns": engine.uns.status()["active_lockdowns"],
+        }
+
+    @app.post("/api/uns/simulate-enterprise")
+    def uns_simulate_enterprise() -> dict[str, Any]:
+        verdicts = engine.uns.simulate_enterprise_uns()
+        return {"verdicts": [v.model_dump(mode="json") for v in verdicts]}
+
+    # ------------------------------------------------------------------
     # Live WebSocket Stream
     # ------------------------------------------------------------------
     @app.websocket("/ws/live")

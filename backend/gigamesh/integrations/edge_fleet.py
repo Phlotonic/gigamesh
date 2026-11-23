@@ -65,12 +65,20 @@ class SignedOfflinePolicyBundle(BaseModel):
     bundle_version: str
     issued_at: str
     champion_fork_id: str
+    uns_enterprise: str = "QuanumisCorp"
     blocked_domains_for_vpn: list[str]
     blocked_patterns: list[str]
     safety_envelopes: list[dict[str, Any]]
+    uns_policies: list[dict[str, Any]] = Field(default_factory=list)
+    sparkplug_to_uns_map: dict[str, str] = Field(default_factory=dict)
     pinned_birth_schemas: dict[str, str]
     bundle_sha256: str
     signature: str
+
+
+def _uns_seg(raw: str) -> str:
+    cleaned = "".join(ch if ch.isalnum() or ch in ("-", "_") else "" for ch in raw.strip().replace(" ", ""))
+    return cleaned or "Node"
 
 
 class EdgeFleetManager:
@@ -85,13 +93,34 @@ class EdgeFleetManager:
         self.devices: dict[str, EdgeDeviceRecord] = {}
         self._seed_demo_fleet()
 
+    def _project_device_to_uns(self, rec: EdgeDeviceRecord) -> None:
+        if not hasattr(self.engine, "uns"):
+            return
+        from gigamesh.integrations.uns import UnsMessageInput
+
+        ent = self.engine.uns.enterprise
+        site = _uns_seg(rec.site_or_plant)
+        plat = _uns_seg(rec.platform)
+        dev = _uns_seg(rec.device_name)
+        topic = f"{ent}/{site}/Operations/Edge/{plat}/{dev}/Devices/Status"
+        self.engine.uns.publish_uns_message(
+            UnsMessageInput(
+                topic=topic,
+                value=rec.status.upper(),
+                datatype="String",
+                sender_id=rec.device_id,
+                sender_role="edge_node",
+            ),
+            source_protocol="edge_fleet",
+        )
+
     def _seed_demo_fleet(self) -> None:
         # Provide initial ready-to-inspect reference entries for novice onboarding
         for name, plat, site, rt, caps, vpn, bio in [
             (
                 "Plant Engineer Pixel 9 Pro",
                 "android",
-                "Austin Factory",
+                "AustinPlant",
                 "capacitor-android",
                 ["biometric_quorum", "vpn_dns_shield", "push_alerts"],
                 True,
@@ -100,9 +129,9 @@ class EdgeFleetManager:
             (
                 "Line-3 Ignition Edge Gateway (ARM64)",
                 "ignition_gateway",
-                "Austin Factory",
+                "AustinPlant",
                 "gigamesh-edge-rust",
-                ["sparkplug_b_guard", "physics_envelope", "offline_verify"],
+                ["sparkplug_b_guard", "uns_wildcard_guard", "physics_envelope", "offline_verify"],
                 False,
                 False,
             ),
@@ -117,6 +146,7 @@ class EdgeFleetManager:
                 biometric_key_registered=bio,
             )
             self.devices[rec.device_id] = rec
+            self._project_device_to_uns(rec)
 
     def enroll_device(self, req: EdgeEnrollRequest) -> dict[str, Any]:
         raw_token = f"gm_edge_{secrets.token_urlsafe(24)}"
@@ -133,8 +163,9 @@ class EdgeFleetManager:
         )
         with self._lock:
             self.devices[rec.device_id] = rec
+        self._project_device_to_uns(rec)
         self.engine.security_audit_log.record(
-            category="access_denied" if False else "owasp_block",
+            category="owasp_block",
             severity="low",
             actor=req.device_name,
             summary=f"Enrolled edge device {rec.device_id} ({req.platform} @ {req.site_or_plant})",
@@ -175,10 +206,11 @@ class EdgeFleetManager:
                 actor="operator",
                 summary=f"Revoked edge device credentials for {dev.device_name} ({device_id})",
             )
-            return dev
+        self._project_device_to_uns(dev)
+        return dev
 
     def compile_signed_policy_bundle(self) -> SignedOfflinePolicyBundle:
-        """Compile an HMAC-SHA256-signed offline policy bundle from Champion + Threat Crawler + OT Envelopes."""
+        """Compile an HMAC-SHA256-signed offline policy bundle from Champion + Threat Crawler + OT Envelopes + UNS Wildcards."""
         champ = self.engine.store.get_champion("enterprise-balanced")
         # Gather IOC domains from threat crawler + base malicious C2 domains for Android VpnService
         domains = {
@@ -201,12 +233,26 @@ class EdgeFleetManager:
 
         envelopes = [r.model_dump(mode="json") for r in self.engine.mqtt_ot.safety_envelopes.values()]
         births = {k: v.schema_sha256 for k, v in self.engine.mqtt_ot.birth_pins.items()}
+        uns_enterprise = self.engine.uns.enterprise if hasattr(self.engine, "uns") else "QuanumisCorp"
+        uns_policies = (
+            [p.model_dump(mode="json") for p in self.engine.uns.policies.values() if p.enabled]
+            if hasattr(self.engine, "uns")
+            else []
+        )
+        sparkplug_map = (
+            dict(self.engine.uns.sparkplug_to_uns_map)
+            if hasattr(self.engine, "uns")
+            else {}
+        )
         issued_at = datetime.now(timezone.utc).isoformat()
         body = {
             "champion_fork_id": champ.fork_id,
+            "uns_enterprise": uns_enterprise,
             "blocked_domains_for_vpn": sorted(domains)[:200],
             "blocked_patterns": sorted(patterns)[:200],
             "safety_envelopes": envelopes,
+            "uns_policies": uns_policies,
+            "sparkplug_to_uns_map": sparkplug_map,
             "pinned_birth_schemas": births,
         }
         canonical = json.dumps(body, sort_keys=True, separators=(",", ":"))
@@ -216,9 +262,12 @@ class EdgeFleetManager:
             bundle_version=f"pol-{digest[:12]}",
             issued_at=issued_at,
             champion_fork_id=champ.fork_id,
+            uns_enterprise=uns_enterprise,
             blocked_domains_for_vpn=body["blocked_domains_for_vpn"],
             blocked_patterns=body["blocked_patterns"],
             safety_envelopes=envelopes,
+            uns_policies=uns_policies,
+            sparkplug_to_uns_map=sparkplug_map,
             pinned_birth_schemas=births,
             bundle_sha256=digest,
             signature=sig,
@@ -227,9 +276,12 @@ class EdgeFleetManager:
     def verify_policy_bundle(self, bundle: SignedOfflinePolicyBundle) -> bool:
         body = {
             "champion_fork_id": bundle.champion_fork_id,
+            "uns_enterprise": bundle.uns_enterprise,
             "blocked_domains_for_vpn": bundle.blocked_domains_for_vpn,
             "blocked_patterns": bundle.blocked_patterns,
             "safety_envelopes": bundle.safety_envelopes,
+            "uns_policies": bundle.uns_policies,
+            "sparkplug_to_uns_map": bundle.sparkplug_to_uns_map,
             "pinned_birth_schemas": bundle.pinned_birth_schemas,
         }
         canonical = json.dumps(body, sort_keys=True, separators=(",", ":"))
