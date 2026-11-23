@@ -113,6 +113,9 @@ class GigaMeshConfig:
     )
     max_request_body_bytes: int = 1_048_576
     api_rate_limit_per_min: int = 240
+    aws_region: str = field(default_factory=lambda: os.environ.get("AWS_REGION", "us-east-1"))
+    aws_toolkit_enabled: bool = True
+    aws_toolkit_read_only: bool = True
 
     @property
     def genome_repo_dir(self) -> Path:

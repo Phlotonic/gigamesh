@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api';
+import { AwsToolkitPanel } from './components/AwsToolkitPanel';
 import { EmailTriagePanel } from './components/EmailTriagePanel';
 import { HelpTip } from './components/HelpTip';
 import { HumanGovernanceHub } from './components/HumanGovernanceHub';
@@ -10,6 +11,7 @@ import { ReaMetabolismLab } from './components/ReaMetabolismLab';
 import { RedHatControlPanel } from './components/RedHatControlPanel';
 import { ThreatCrawlerPanel } from './components/ThreatCrawlerPanel';
 import type {
+  AwsToolkitStatus,
   CrawlFinding,
   CrawlRunReport,
   EmailListenerStatus,
@@ -29,7 +31,7 @@ import type {
   ThreatCrawlerStatus,
 } from './types';
 
-type TabId = 'neural' | 'provenance' | 'rea' | 'human' | 'redhat' | 'email' | 'crawler' | 'owasp';
+type TabId = 'neural' | 'provenance' | 'rea' | 'human' | 'redhat' | 'email' | 'crawler' | 'owasp' | 'aws';
 
 export default function App() {
   const [tab, setTab] = useState<TabId>('neural');
@@ -66,6 +68,7 @@ export default function App() {
   const [crawlerFindings, setCrawlerFindings] = useState<CrawlFinding[]>([]);
   const [crawlerRuns, setCrawlerRuns] = useState<CrawlRunReport[]>([]);
   const [owaspReport, setOwaspReport] = useState<OwaspBenchmarkReport | null>(null);
+  const [awsStatus, setAwsStatus] = useState<AwsToolkitStatus | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -76,7 +79,7 @@ export default function App() {
 
   const refreshAll = useCallback(async () => {
     try {
-      const [ov, fk, ev, pv, inc, scn, rea, hu, rh, sy, em, cr, ow] = await Promise.all([
+      const [ov, fk, ev, pv, inc, scn, rea, hu, rh, sy, em, cr, ow, aw] = await Promise.all([
         api.getOverview(),
         api.getForks(useCaseFilter || undefined),
         api.getEvolutionReports(),
@@ -90,6 +93,7 @@ export default function App() {
         api.getEmailListener(),
         api.getThreatCrawler(),
         api.getOwaspBenchmark(),
+        api.getAwsToolkit(),
       ]);
       setOverview(ov);
       setForks(fk.forks);
@@ -112,6 +116,7 @@ export default function App() {
       setCrawlerFindings(cr.recent_findings);
       setCrawlerRuns(cr.recent_runs);
       setOwaspReport(ow);
+      setAwsStatus(aw);
       setSelectedFork((prev) => {
         if (prev) {
           const updated = fk.forks.find((f) => f.fork_id === prev.fork_id);
@@ -250,6 +255,7 @@ export default function App() {
             ['email', `Email Security Triage (${emailDecisions.length})`],
             ['crawler', `Global Threat Crawler (${crawlerStatus?.enabled ? 'ON' : 'OFF'} · ${crawlerStatus?.total_findings ?? 0})`],
             ['owasp', `OWASP Top 10 Benchmark (${owaspReport ? `${owaspReport.passed_probes}/${owaspReport.total_probes}` : '30'})`],
+            ['aws', `AWS Agent Toolkit (${awsStatus?.counts.pinned_tools ?? 0} MCP · ${awsStatus?.counts.findings ?? 0})`],
           ] as [TabId, string][]
         ).map(([id, label]) => (
           <button
@@ -899,6 +905,69 @@ export default function App() {
                 );
               } catch (err) {
                 notify(`Benchmark error: ${(err as Error).message}`);
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+          />
+        )}
+
+        {/* TAB 9: AWS AGENT TOOLKIT INTEGRATION */}
+        {tab === 'aws' && (
+          <AwsToolkitPanel
+            status={awsStatus}
+            busy={busyAction !== null}
+            onToggle={async (enabled, region, readOnly) => {
+              setBusyAction('aws_toggle');
+              try {
+                const st = await api.toggleAwsToolkit(enabled, region, readOnly);
+                setAwsStatus(st);
+                notify(`AWS Agent Toolkit ${st.enabled ? 'ON' : 'OFF'} (${st.region})`);
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onDiscoverMcp={async () => {
+              setBusyAction('aws_discover');
+              try {
+                const res = await api.discoverAwsMcp();
+                notify(`AWS MCP connected: ${String(res.tools_count ?? 0)} tools SHA-256 pinned (${String(res.rugpulls_detected ?? 0)} rug-pulls)`);
+                await refreshAll();
+              } catch (err) {
+                notify(`AWS MCP discovery error: ${(err as Error).message}`);
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onSearchDocs={async (phrase) => {
+              const res = await api.searchAwsDocs(phrase, 4);
+              notify(`AWS MCP docs search returned ${res.results.length} result(s)`);
+              return res.results;
+            }}
+            onRetrieveSkill={async (skillName) => {
+              setBusyAction(`aws_skill_${skillName}`);
+              try {
+                const rec = await api.retrieveAwsSkill(skillName);
+                notify(
+                  rec.poison_blocked
+                    ? `QUARANTINED poisoned skill ${rec.skill_name}!`
+                    : `Fetched & verified official skill ${rec.skill_name} (sha:${rec.sha256.slice(0, 8)})`
+                );
+                await refreshAll();
+                return rec;
+              } catch (err) {
+                notify(`Skill retrieval error: ${(err as Error).message}`);
+                return null;
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onSimulateAttack={async () => {
+              setBusyAction('aws_sim');
+              try {
+                const res = await api.simulateAwsAttackSequence();
+                notify(`Ingested ${res.ingested.length} prioritized AWS findings with Rule 9 redaction & HITL quorum`);
+                await refreshAll();
               } finally {
                 setBusyAction(null);
               }

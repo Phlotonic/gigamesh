@@ -494,3 +494,81 @@ export interface OwaspBenchmarkReport {
   results: OwaspProbeResult[];
 }
 
+export interface AwsToolkitPluginInfo {
+  plugin_id: string;
+  name: string;
+  category: string;
+  description: string;
+  key_skills: string[];
+  upstream_url: string;
+}
+
+export interface AwsMcpToolPin {
+  name: string;
+  description: string;
+  sha256: string;
+  read_only: boolean;
+  rugpull_detected: boolean;
+  pinned_at: string;
+}
+
+export interface AwsSkillRecord {
+  skill_name: string;
+  source: string;
+  sha256: string;
+  poison_checked: boolean;
+  poison_blocked: boolean;
+  preview: string;
+  full_length: number;
+  fetched_at: string;
+}
+
+export interface AwsIngestedFinding {
+  record_id: string;
+  ingested_at: string;
+  service: string;
+  finding_type: string;
+  title: string;
+  reported_severity: string;
+  priority_bucket: number;
+  region: string;
+  masked_account: string;
+  masked_resource: string;
+  redacted_summary: string;
+  redactions_applied: number;
+  evidence_state: string;
+  gigamesh_incident_id: string | null;
+  quorum_id: string | null;
+  remediation_plan: Record<string, unknown>;
+}
+
+export interface AwsDocSearchResult {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
+export interface AwsToolkitStatus {
+  enabled: boolean;
+  region: string;
+  read_only_enforced: boolean;
+  last_mcp_status: string;
+  last_mcp_discovery_at: string | null;
+  server_info: Record<string, unknown>;
+  doctor: Record<string, unknown>;
+  plugins: AwsToolkitPluginInfo[];
+  pinned_tools: AwsMcpToolPin[];
+  retrieved_skills: AwsSkillRecord[];
+  findings: AwsIngestedFinding[];
+  counts: {
+    plugins: number;
+    pinned_tools: number;
+    retrieved_skills: number;
+    findings: number;
+    attack_sequences: number;
+    exposures: number;
+  };
+  mcp_config: Record<string, unknown>;
+}
+
+

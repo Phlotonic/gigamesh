@@ -88,6 +88,22 @@ class ThreatSourceToggleRequest(BaseModel):
     enabled: bool
 
 
+class AwsToolkitToggleRequest(BaseModel):
+    enabled: bool
+    region: str | None = None
+    read_only_enforced: bool | None = None
+
+
+class AwsDocSearchRequest(BaseModel):
+    search_phrase: str
+    limit: int = 4
+
+
+class AwsRetrieveSkillRequest(BaseModel):
+    skill_name: str
+    file: str | None = None
+
+
 def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | None = None) -> FastAPI:
     cfg = config or GigaMeshConfig()
     if enable_autopilot is not None:
@@ -501,6 +517,63 @@ def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | No
             "circuit_breaker": engine.circuit_breaker.status(),
             "recent_entries": engine.security_audit_log.recent(limit=min(limit, 200)),
         }
+
+    # ------------------------------------------------------------------
+    # AWS Agent Toolkit (aws/agent-toolkit-for-aws) Endpoints
+    # ------------------------------------------------------------------
+    @app.get("/api/aws-toolkit/status")
+    def aws_toolkit_status() -> dict[str, Any]:
+        return engine.aws_toolkit.status()
+
+    @app.post("/api/aws-toolkit/toggle")
+    def aws_toolkit_toggle(req: AwsToolkitToggleRequest) -> dict[str, Any]:
+        engine.aws_toolkit.enabled = req.enabled
+        if req.region and req.region.strip():
+            engine.aws_toolkit.region = req.region.strip()
+        if req.read_only_enforced is not None:
+            engine.aws_toolkit.read_only_enforced = req.read_only_enforced
+        return engine.aws_toolkit.status()
+
+    @app.post("/api/aws-toolkit/discover-mcp")
+    def aws_toolkit_discover_mcp() -> dict[str, Any]:
+        try:
+            return engine.aws_toolkit.discover_mcp_tools()
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"AWS MCP discovery failed: {exc}") from exc
+
+    @app.post("/api/aws-toolkit/search-docs")
+    def aws_toolkit_search_docs(req: AwsDocSearchRequest) -> dict[str, Any]:
+        try:
+            results = engine.aws_toolkit.search_aws_docs(req.search_phrase, limit=req.limit)
+            return {"query": req.search_phrase, "results": [r.model_dump(mode="json") for r in results]}
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"AWS MCP docs search failed: {exc}") from exc
+
+    @app.post("/api/aws-toolkit/retrieve-skill")
+    def aws_toolkit_retrieve_skill(req: AwsRetrieveSkillRequest) -> dict[str, Any]:
+        try:
+            rec = engine.aws_toolkit.retrieve_skill(req.skill_name, file=req.file)
+            return rec.model_dump(mode="json")
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"AWS MCP skill retrieval failed: {exc}") from exc
+
+    @app.post("/api/aws-toolkit/ingest-finding")
+    def aws_toolkit_ingest_finding(payload: dict[str, Any]) -> dict[str, Any]:
+        from gigamesh.integrations.aws_toolkit import AwsSecurityFindingInput
+
+        rec = engine.aws_toolkit.ingest_aws_finding(AwsSecurityFindingInput(**payload))
+        return rec.model_dump(mode="json")
+
+    @app.post("/api/aws-toolkit/simulate-attack-sequence")
+    def aws_toolkit_simulate_attack() -> dict[str, Any]:
+        records = engine.aws_toolkit.simulate_aws_attack_sequence()
+        return {"ingested": [r.model_dump(mode="json") for r in records]}
+
+    @app.get("/api/aws-toolkit/mcp-config")
+    def aws_toolkit_mcp_config() -> dict[str, Any]:
+        return engine.aws_toolkit.generate_mcp_config()
 
     # ------------------------------------------------------------------
     # Live WebSocket Stream

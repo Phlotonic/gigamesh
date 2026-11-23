@@ -231,6 +231,23 @@ export const GLOSSARY = {
     title: 'Cognitive & Blast-Radius Circuit Breaker',
     body: 'Automatically halts runaway AI agent swarms, recursive delegation storms, and token/cost floods before they can cascade or drain your budget.',
   },
+  awsToolkit: {
+    title: 'AWS Agent Toolkit Integration',
+    body: 'Connects GigaMesh directly to AWS’s official MCP server, security skills, DevOps/Security Agents, and Continuum workflows—protected by GigaMesh’s zero-trust guardrails.',
+    why: 'Lets GigaMesh pull real-time AWS security guidance and defend hybrid AWS + Linux/OpenShift environments from one place.',
+  },
+  awsReadOnly: {
+    title: 'Read-Only First Safety Guardrail',
+    body: 'Following AWS Security best practices, GigaMesh only reads AWS state automatically. Any change to IAM roles, firewalls, or keys waits for human team approval (HITL Quorum).',
+  },
+  awsMcpPinning: {
+    title: 'MCP Tool Pinning (Rug-Pull Protection)',
+    body: 'Every AWS MCP tool description is cryptographically fingerprinted (SHA-256) on first discovery so GigaMesh catches any unexpected mid-session tampering immediately.',
+  },
+  awsPriorityFindings: {
+    title: 'Prioritized AWS Findings & Redaction',
+    body: 'GuardDuty Attack Sequences (multi-step attacks) and Security Hub Exposures always appear at the top. AWS account numbers, keys, and emails are automatically masked.',
+  },
 } as const satisfies Record<string, GlossaryEntry>;
 
 export type GlossaryKey = keyof typeof GLOSSARY;

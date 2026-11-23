@@ -14,6 +14,10 @@ import type {
   SyncFirewallStatus,
   EmailListenerStatus,
   EmailTriageDecision,
+  AwsDocSearchResult,
+  AwsIngestedFinding,
+  AwsSkillRecord,
+  AwsToolkitStatus,
   CrawlRunReport,
   OwaspBenchmarkReport,
   ThreatCrawlerData,
@@ -136,4 +140,23 @@ export const api = {
     }),
   getOwaspBenchmark: () => request<OwaspBenchmarkReport>('/api/benchmarks/owasp'),
   runOwaspBenchmark: () => request<OwaspBenchmarkReport>('/api/benchmarks/owasp/run', { method: 'POST' }),
+  getAwsToolkit: () => request<AwsToolkitStatus>('/api/aws-toolkit/status'),
+  toggleAwsToolkit: (enabled: boolean, region?: string, read_only_enforced?: boolean) =>
+    request<AwsToolkitStatus>('/api/aws-toolkit/toggle', {
+      method: 'POST',
+      body: JSON.stringify({ enabled, region, read_only_enforced }),
+    }),
+  discoverAwsMcp: () => request<Record<string, unknown>>('/api/aws-toolkit/discover-mcp', { method: 'POST' }),
+  searchAwsDocs: (search_phrase: string, limit = 4) =>
+    request<{ query: string; results: AwsDocSearchResult[] }>('/api/aws-toolkit/search-docs', {
+      method: 'POST',
+      body: JSON.stringify({ search_phrase, limit }),
+    }),
+  retrieveAwsSkill: (skill_name: string, file?: string) =>
+    request<AwsSkillRecord>('/api/aws-toolkit/retrieve-skill', {
+      method: 'POST',
+      body: JSON.stringify({ skill_name, file }),
+    }),
+  simulateAwsAttackSequence: () =>
+    request<{ ingested: AwsIngestedFinding[] }>('/api/aws-toolkit/simulate-attack-sequence', { method: 'POST' }),
 };

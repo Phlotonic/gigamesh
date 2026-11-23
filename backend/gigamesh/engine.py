@@ -20,6 +20,7 @@ from gigamesh.detectors.registry import DetectorRegistry
 from gigamesh.evolution.autopoiesis import AutopoiesisEngine
 from gigamesh.evolution.evaluator import OptionEvaluator
 from gigamesh.human_sec.hub import HumanSecurityHub
+from gigamesh.integrations.aws_toolkit import AwsAgentToolkitBridge
 from gigamesh.integrations.email_listener import EmailSecurityListener
 from gigamesh.integrations.threat_crawler import ThreatIntelCrawler
 from gigamesh.models.asef import AsefEvent, IncidentCase, Severity
@@ -97,6 +98,12 @@ class GigaMeshEngine:
             crawl_interval_sec=self.config.threat_crawler_interval_sec,
             auto_evolve_on_findings=True,
             state_file=self.config.threat_crawler_state_path,
+        )
+        self.aws_toolkit = AwsAgentToolkitBridge(
+            engine=self,
+            enabled=self.config.aws_toolkit_enabled,
+            region=self.config.aws_region,
+            read_only_enforced=self.config.aws_toolkit_read_only,
         )
 
     # ------------------------------------------------------------------
@@ -566,4 +573,12 @@ class GigaMeshEngine:
             },
             "security_audit_chain": self.security_audit_log.verify_chain(),
             "circuit_breaker": self.circuit_breaker.status(),
+            "aws_toolkit": {
+                "enabled": self.aws_toolkit.enabled,
+                "region": self.aws_toolkit.region,
+                "read_only_enforced": self.aws_toolkit.read_only_enforced,
+                "mcp_status": self.aws_toolkit.last_mcp_status,
+                "pinned_tools": len(self.aws_toolkit.pinned_tools),
+                "findings": len(self.aws_toolkit.findings),
+            },
         }
