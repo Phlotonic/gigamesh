@@ -234,6 +234,7 @@ class AwsAgentToolkitBridge:
         self.findings: list[AwsIngestedFinding] = []
         self.last_mcp_discovery_at: datetime | None = None
         self.last_mcp_status: str = "not_yet_probed"
+        self._mcp_session_id: str | None = None
 
     # ------------------------------------------------------------------
     # MCP Config Generator & Environment Doctor
@@ -291,26 +292,63 @@ class AwsAgentToolkitBridge:
     # ------------------------------------------------------------------
     # Live Official AWS MCP Streamable-HTTP JSON-RPC Client
     # ------------------------------------------------------------------
-    def _rpc_call(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _ensure_mcp_session(self) -> None:
+        if self._rpc_transport is not None or self._mcp_session_id:
+            return
+        init_res = self._rpc_call(
+            "initialize",
+            {
+                "protocolVersion": "2025-03-26",
+                "capabilities": {},
+                "clientInfo": {"name": "gigamesh-siem", "version": "0.1.0"},
+            },
+            require_session=False,
+        )
+        self.server_info = init_res.get("result", {}).get("serverInfo", self.server_info)
+
+    def _rpc_call(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        *,
+        require_session: bool = True,
+    ) -> dict[str, Any]:
         payload = {"jsonrpc": "2.0", "id": uuid4().hex[:8], "method": method, "params": params or {}}
         if self._rpc_transport is not None:
             return self._rpc_transport(self.mcp_endpoint, payload)
 
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/event-stream",
-            "User-Agent": "GigaMesh-AwsToolkitBridge/0.1 (+https://github.com/Phlotonic/gigamesh)",
-        }
-        with httpx.Client(timeout=12.0, follow_redirects=False) as client:
-            resp = client.post(self.mcp_endpoint, json=payload, headers=headers)
-            resp.raise_for_status()
-            ctype = resp.headers.get("content-type", "")
-            if "text/event-stream" in ctype:
-                # Extract first JSON-RPC data line from SSE stream
-                for line in resp.text.splitlines():
-                    if line.startswith("data:"):
-                        return json.loads(line[5:].strip())
-            return resp.json()
+        if require_session and not self._mcp_session_id and method != "initialize":
+            self._ensure_mcp_session()
+
+        def _send() -> dict[str, Any]:
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+                "User-Agent": "GigaMesh-AwsToolkitBridge/0.1 (+https://github.com/Phlotonic/gigamesh)",
+            }
+            if self._mcp_session_id and method != "initialize":
+                headers["Mcp-Session-Id"] = self._mcp_session_id
+            with httpx.Client(timeout=12.0, follow_redirects=False) as client:
+                resp = client.post(self.mcp_endpoint, json=payload, headers=headers)
+                resp.raise_for_status()
+                sid = resp.headers.get("mcp-session-id")
+                if sid:
+                    self._mcp_session_id = sid
+                ctype = resp.headers.get("content-type", "")
+                if "text/event-stream" in ctype:
+                    for line in resp.text.splitlines():
+                        if line.startswith("data:"):
+                            return json.loads(line[5:].strip())
+                return resp.json()
+
+        data = _send()
+        # Auto-recover once if AWS MCP session expired
+        err_msg = str(data.get("error", {}).get("message", "")).lower()
+        if require_session and "session id" in err_msg and method != "initialize":
+            self._mcp_session_id = None
+            self._ensure_mcp_session()
+            data = _send()
+        return data
 
     def discover_mcp_tools(self) -> dict[str, Any]:
         """Connect to live official AWS MCP server, discover tools, and SHA-256 pin them (OWASP ASI04)."""
@@ -321,6 +359,7 @@ class AwsAgentToolkitBridge:
                 "capabilities": {},
                 "clientInfo": {"name": "gigamesh-siem", "version": "0.1.0"},
             },
+            require_session=False,
         )
         self.server_info = init_res.get("result", {}).get("serverInfo", {})
         tools_res = self._rpc_call("tools/list", {})
@@ -387,7 +426,15 @@ class AwsAgentToolkitBridge:
                 continue
             try:
                 parsed = json.loads(raw_text)
-                items = parsed if isinstance(parsed, list) else parsed.get("search_results") or parsed.get("results") or [parsed]
+                if isinstance(parsed, dict) and isinstance(parsed.get("content"), dict):
+                    inner = parsed["content"]
+                    items = inner.get("result") or inner.get("search_results") or inner.get("results") or []
+                elif isinstance(parsed, list):
+                    items = parsed
+                elif isinstance(parsed, dict):
+                    items = parsed.get("search_results") or parsed.get("results") or parsed.get("result") or [parsed]
+                else:
+                    items = []
                 for item in items[:limit]:
                     if not isinstance(item, dict):
                         continue
@@ -414,7 +461,19 @@ class AwsAgentToolkitBridge:
             args["file"] = file
         res = self._rpc_call("tools/call", {"name": "aws___retrieve_skill", "arguments": args})
         blocks = res.get("result", {}).get("content", [])
-        text = "\n".join(str(b.get("text", "")) for b in blocks if b.get("text"))
+        raw_text = "\n".join(str(b.get("text", "")) for b in blocks if b.get("text"))
+        text = raw_text
+        if raw_text.lstrip().startswith("{"):
+            try:
+                parsed = json.loads(raw_text)
+                if isinstance(parsed, dict):
+                    inner = parsed.get("content", parsed)
+                    if isinstance(inner, dict) and isinstance(inner.get("skill_content"), str):
+                        text = inner["skill_content"]
+                    elif isinstance(inner, dict) and isinstance(inner.get("file_content"), str):
+                        text = inner["file_content"]
+            except json.JSONDecodeError:
+                pass
         if not text:
             raise ValueError(f"AWS MCP returned empty content for skill '{skill_name}'")
 
