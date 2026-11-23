@@ -10,11 +10,15 @@ import { OtEdgeFleetPanel } from './components/OtEdgeFleetPanel';
 import { OwaspBenchmarkPanel } from './components/OwaspBenchmarkPanel';
 import { ProvenanceGraph } from './components/ProvenanceGraph';
 import { ReaMetabolismLab } from './components/ReaMetabolismLab';
+import { EnterpriseSocSuitePanel } from './components/EnterpriseSocSuitePanel';
+import { OtEnterpriseSuitePanel } from './components/OtEnterpriseSuitePanel';
 import { RedHatControlPanel } from './components/RedHatControlPanel';
 import { ThreatCrawlerPanel } from './components/ThreatCrawlerPanel';
 import { UnsExplorerPanel } from './components/UnsExplorerPanel';
 import type {
+  AiGatewayStatus,
   AwsToolkitStatus,
+  ComplianceStatus,
   CrawlFinding,
   CrawlRunReport,
   EdgeFleetStatus,
@@ -26,18 +30,21 @@ import type {
   IncidentCase,
   MetabolizedDefenseModule,
   MqttOtStatus,
+  OtDpiStatus,
   OverviewResponse,
   OwaspBenchmarkReport,
   ProvenanceSnapshot,
   ReaEvidenceDossier,
   RedHatControlData,
   ScenarioMeta,
+  SoarStatus,
+  SraStatus,
   SyncFirewallStatus,
   ThreatCrawlerStatus,
   UnsStatus,
 } from './types';
 
-type TabId = 'neural' | 'provenance' | 'rea' | 'human' | 'redhat' | 'email' | 'crawler' | 'owasp' | 'aws' | 'ot' | 'uns';
+type TabId = 'neural' | 'provenance' | 'rea' | 'human' | 'redhat' | 'email' | 'crawler' | 'owasp' | 'aws' | 'ot' | 'uns' | 'ot_dpi' | 'soc_suite';
 
 export default function App() {
   const isHmiEmbed = typeof window !== 'undefined' && window.location.pathname.startsWith('/embed/hmi');
@@ -80,6 +87,11 @@ export default function App() {
   const [otStatus, setOtStatus] = useState<MqttOtStatus | null>(null);
   const [edgeFleet, setEdgeFleet] = useState<EdgeFleetStatus | null>(null);
   const [unsStatus, setUnsStatus] = useState<UnsStatus | null>(null);
+  const [otDpi, setOtDpi] = useState<OtDpiStatus | null>(null);
+  const [sraStatus, setSraStatus] = useState<SraStatus | null>(null);
+  const [aiGateway, setAiGateway] = useState<AiGatewayStatus | null>(null);
+  const [compliance, setCompliance] = useState<ComplianceStatus | null>(null);
+  const [soarStatus, setSoarStatus] = useState<SoarStatus | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -90,7 +102,7 @@ export default function App() {
 
   const refreshAll = useCallback(async () => {
     try {
-      const [ov, fk, ev, pv, inc, scn, rea, hu, rh, sy, em, cr, ow, aw, ot, fl, un] = await Promise.all([
+      const [ov, fk, ev, pv, inc, scn, rea, hu, rh, sy, em, cr, ow, aw, ot, fl, un, dpi, sra, aigw, comp, soar] = await Promise.all([
         api.getOverview(),
         api.getForks(useCaseFilter || undefined),
         api.getEvolutionReports(),
@@ -108,6 +120,11 @@ export default function App() {
         api.getMqttOtStatus(),
         api.getEdgeFleet(),
         api.getUnsStatus(),
+        api.getOtDpiStatus(),
+        api.getSraStatus(),
+        api.getAiGatewayStatus(),
+        api.getComplianceStatus(),
+        api.getSoarStatus(),
       ]);
       setOverview(ov);
       setForks(fk.forks);
@@ -134,6 +151,11 @@ export default function App() {
       setOtStatus(ot);
       setEdgeFleet(fl);
       setUnsStatus(un);
+      setOtDpi(dpi);
+      setSraStatus(sra);
+      setAiGateway(aigw);
+      setCompliance(comp);
+      setSoarStatus(soar);
       setSelectedFork((prev) => {
         if (prev) {
           const updated = fk.forks.find((f) => f.fork_id === prev.fork_id);
@@ -336,6 +358,7 @@ export default function App() {
             otStatus={otStatus}
             fleet={edgeFleet}
             uns={unsStatus}
+            compliance={compliance}
             busy={busyAction !== null}
             onToggleAutopilot={handleToggleAutopilot}
             onToggleCrawler={async (enabled) => {
@@ -392,6 +415,7 @@ export default function App() {
                 setBusyAction(null);
               }
             }}
+            onAskCopilot={(q) => api.askCopilot(q)}
             onSwitchToExpert={() => setViewMode('expert')}
           />
         </main>
@@ -411,6 +435,8 @@ export default function App() {
             ['aws', `AWS Agent Toolkit (${awsStatus?.counts.pinned_tools ?? 0} MCP · ${awsStatus?.counts.findings ?? 0})`],
             ['ot', `Industrial OT / Edge Fleet (${edgeFleet?.total_devices ?? 0})`],
             ['uns', `Unified Namespace · UNS (${unsStatus?.total_nodes ?? 0})`],
+            ['ot_dpi', `OT DPI · Purdue & Vendor SRA (${otDpi?.total_assets ?? 0})`],
+            ['soc_suite', `AI Gateway · Compliance & SOAR (${compliance?.overall_readiness_pct ?? 0}%)`],
           ] as [TabId, string][]
         ).map(([id, label]) => (
           <button
@@ -1214,6 +1240,137 @@ export default function App() {
                 setBusyAction(null);
               }
             }}
+          />
+        )}
+
+        {/* TAB 12: OT DEEP PROTOCOL DPI, PURDUE 0-5 & ZERO-TRUST VENDOR SRA */}
+        {tab === 'ot_dpi' && (
+          <OtEnterpriseSuitePanel
+            otDpi={otDpi}
+            sra={sraStatus}
+            uns={unsStatus}
+            busy={busyAction !== null}
+            onSimulateDpi={async () => {
+              setBusyAction('dpi_sim');
+              try {
+                const res = await api.simulateOtDpi();
+                notify(`Passive OT DPI inspected ${res.alerts.length} multi-protocol frames (S7comm PLC_STOP & DNP3 Cold Restart blocked!)`);
+                await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onToggleZoneMode={async (policyId, mode) => {
+              setBusyAction(`zone_${policyId}`);
+              try {
+                await api.setOtZonePolicyMode(policyId, mode);
+                notify(`Purdue zone policy ${policyId} switched to ${mode.toUpperCase()}`);
+                await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onRequestSra={async (payload) => {
+              setBusyAction('sra_req');
+              try {
+                await api.requestSraSession(payload);
+                notify(`Requested time-boxed JIT SRA session for ${payload.vendor_name} (awaiting approval)`);
+                await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onApproveSra={async (sessionId) => {
+              setBusyAction(`sra_ok_${sessionId}`);
+              try {
+                await api.approveSraSession(sessionId);
+                notify(`Activated JIT Vendor SRA session ${sessionId}`);
+                await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onRunSraCommand={async (sessionId, command) => {
+              setBusyAction(`sra_cmd_${sessionId}`);
+              try {
+                const res = await api.runSraCommand(sessionId, command);
+                notify(res.allowed ? `SRA command allowed & hash-chained` : `SRA BLOCKED command: ${String(res.reason)}`);
+                await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onKillSra={async (sessionId) => {
+              setBusyAction(`sra_kill_${sessionId}`);
+              try {
+                await api.killSraSession(sessionId);
+                notify(`⛔ 1-Click Kill-Switch severed Vendor SRA session ${sessionId}`);
+                await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+          />
+        )}
+
+        {/* TAB 13: INLINE AI GATEWAY / RED-TEAM, 5-FRAMEWORK COMPLIANCE, MITRE & SOAR */}
+        {tab === 'soc_suite' && (
+          <EnterpriseSocSuitePanel
+            aiGateway={aiGateway}
+            compliance={compliance}
+            soar={soarStatus}
+            busy={busyAction !== null}
+            onRunRedTeam={async () => {
+              setBusyAction('rt_run');
+              try {
+                const rep = await api.runAiRedTeam();
+                notify(`Automated Red-Team Campaign: ${String(rep.blocked_probes)}/${String(rep.total_probes)} blocked (${String(rep.resilience_score_pct)}%)`);
+                await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onInspectAiSample={async (content, provider) => {
+              setBusyAction('aigw_test');
+              try {
+                const v = await api.inspectAiTraffic({
+                  provider,
+                  model: provider === 'shadow_untrusted' ? 'unapproved-llm' : 'claude-sonnet-4',
+                  agent_id: 'live-tester',
+                  content,
+                });
+                notify(`AI Gateway verdict: ${String(v.decision).toUpperCase()} (${String(v.latency_us)} µs)`);
+                await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onExportOcsf={async () => {
+              const res = await api.exportOcsfEvents();
+              notify(`Exported ${String(res.count)} OCSF v1.3.0 security findings`);
+              return res;
+            }}
+            onRunPlaybook={async (playbookId, target, dryRun) => {
+              setBusyAction(`pb_${playbookId}`);
+              try {
+                const res = await api.runSoarPlaybook(playbookId, target, dryRun);
+                notify(`SOAR ${dryRun ? 'Dry-Run' : 'Execution'}: ${String(res.playbook_name)} (${String(res.status)})`);
+                await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onRollbackPlaybook={async (executionId) => {
+              setBusyAction(`rb_${executionId}`);
+              try {
+                await api.rollbackSoarExecution(executionId);
+                notify(`↩ 1-Click Safe Rollback completed for ${executionId}`);
+                await refreshAll();
+              } finally {
+                setBusyAction(null);
+              }
+            }}
+            onAskCopilot={(q) => api.askCopilot(q)}
           />
         )}
       </main>

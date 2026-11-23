@@ -278,6 +278,46 @@ export const GLOSSARY = {
     title: '1-Click Plant Read-Only Lockdown',
     body: 'Instantly freezes all remote equipment write commands across an entire factory (both ISA-95 UNS and Sparkplug B) while keeping sensor telemetry flowing and leaving other factories completely unaffected.',
   },
+  otDpiPurdue: {
+    title: 'Passive Industrial Protocol DPI & Purdue Model (Levels 0–5)',
+    body: 'Quietly reads factory network protocols (Modbus, Siemens S7, DNP3, OPC-UA, EtherNet/IP, BACnet, IEC-104) without slowing down legacy PLCs, mapping every controller to its Purdue safety zone.',
+  },
+  virtualPatching: {
+    title: 'Exploitability Risk Scoring & Virtual Patching',
+    body: 'Combines CVE severity, real-world exploit likelihood (EPSS & CISA KEV), and shows how much GigaMesh’s Digital Physics limits reduce real danger on legacy PLCs that cannot be rebooted to patch.',
+  },
+  jitVendorSra: {
+    title: 'Zero-Trust Just-in-Time (JIT) Vendor Remote Access',
+    body: 'Replaces risky always-on vendor VPNs with time-limited, single-machine sessions approved by your team, with every command tamper-proof recorded and a 1-click instant kill-switch.',
+  },
+  unsDataContracts: {
+    title: 'UNS Versioned Data Contracts (Schema Governance)',
+    body: 'Checks that every factory sensor and AI message matches its expected data type and range, catching broken sensors or tampered payloads before they corrupt downstream analytics.',
+  },
+  aiGatewayDspm: {
+    title: 'Inline AI Gateway, AI-SPM & DSPM Secret Scrubber',
+    body: 'Sits in front of AI models (Bedrock, OpenAI, Anthropic, Gemini, local vLLM) to automatically scrub SSNs, AWS keys, and tokens before data leaves your company—and blocks unapproved Shadow AI.',
+  },
+  autoRedTeam: {
+    title: 'Continuous Automated AI Red-Teaming',
+    body: 'Safely fires real-world prompt injections, jailbreaks, secret leaks, Shadow AI bypasses, and boiler-override attempts against your own defenses to prove 100% resilience.',
+  },
+  continuousCompliance: {
+    title: 'Continuous 5-Framework Compliance & OCSF Export',
+    body: 'Automatically maps live GigaMesh proof into auditor-ready scores for IEC 62443, NIST SP 800-82, NERC CIP, NIST CSF 2.0, and EU NIS2/CRA—and exports standard OCSF v1.3 findings.',
+  },
+  mitreTripleMatrix: {
+    title: 'MITRE Triple-Matrix & Sigma Detection-as-Code',
+    body: 'Tracks active defense coverage across IT (ATT&CK Enterprise), Factories (ATT&CK for ICS), and AI (MITRE ATLAS), plus lets teams add custom Sigma detection rules.',
+  },
+  soarRollback: {
+    title: 'SOAR Playbooks with Dry-Run & 1-Click Rollback',
+    body: 'Lets you preview an automated containment workflow in safe Dry-Run mode before executing—and undo it with one click if a plant alert turns out to be routine maintenance.',
+  },
+  askGigaMesh: {
+    title: 'Ask GigaMesh (Air-Gapped Local Assistant)',
+    body: 'Answers plain-English questions directly from your live plant, compliance, and security data—100% locally with zero internet dependency and zero AI guesswork.',
+  },
 } as const satisfies Record<string, GlossaryEntry>;
 
 export type GlossaryKey = keyof typeof GLOSSARY;

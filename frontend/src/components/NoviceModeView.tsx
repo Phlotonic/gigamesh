@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import type {
+  ComplianceStatus,
+  CopilotAnswer,
   EdgeFleetStatus,
   HumanHubData,
   IncidentCase,
@@ -20,6 +22,7 @@ interface Props {
   otStatus: MqttOtStatus | null;
   fleet: EdgeFleetStatus | null;
   uns: UnsStatus | null;
+  compliance: ComplianceStatus | null;
   busy: boolean;
   onToggleAutopilot: () => Promise<void>;
   onToggleCrawler: (enabled: boolean) => Promise<void>;
@@ -27,6 +30,7 @@ interface Props {
   onApproveQuorum: (quorumId: string, decision: 'approve' | 'reject') => Promise<void>;
   onSimulateIgnition: () => Promise<void>;
   onToggleSiteLockdown: (site: string, locked: boolean) => Promise<void>;
+  onAskCopilot: (question: string) => Promise<CopilotAnswer>;
   onSwitchToExpert: () => void;
 }
 
@@ -41,6 +45,7 @@ export function NoviceModeView({
   otStatus,
   fleet,
   uns,
+  compliance,
   busy,
   onToggleAutopilot,
   onToggleCrawler,
@@ -48,9 +53,12 @@ export function NoviceModeView({
   onApproveQuorum,
   onSimulateIgnition,
   onToggleSiteLockdown,
+  onAskCopilot,
   onSwitchToExpert,
 }: Props) {
   const [subTab, setSubTab] = useState<NoviceTab>('home');
+  const [askText, setAskText] = useState('');
+  const [copilotReply, setCopilotReply] = useState<CopilotAnswer | null>(null);
   const pendingQuorums = humanHub.quorums.filter((q) => q.status === 'pending');
   const bestScore = overview
     ? Math.max(...Object.values(overview.champions).map((c) => c.benchmark_stats?.composite_success_rate ?? 0)) * 100
@@ -101,6 +109,11 @@ export function NoviceModeView({
                       OWASP Top 10: {owaspReport.passed_probes}/{owaspReport.total_probes} Verified
                     </span>
                   )}
+                  {compliance && (
+                    <span className="gm-tag champion">
+                      Audit Readiness: {compliance.overall_readiness_pct}% (5 Standards)
+                    </span>
+                  )}
                   {uns && (
                     <span className="gm-tag">
                       Unified Namespace: {uns.total_nodes} Live Assets
@@ -126,6 +139,46 @@ export function NoviceModeView({
                   <HelpTip term="autopoiesis" />
                 </span>
               </label>
+            </div>
+          </div>
+
+          {/* Plain-English Ask GigaMesh Assistant Bar */}
+          <div className="gm-panel">
+            <div className="gm-panel-body gm-list-stack">
+              <form
+                className="gm-form-row"
+                style={{ flexWrap: 'wrap' }}
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!askText.trim()) return;
+                  setCopilotReply(await onAskCopilot(askText.trim()));
+                }}
+              >
+                <span className="gm-heading-tip" style={{ fontWeight: 600, fontSize: 13 }}>
+                  Ask GigaMesh
+                  <HelpTip term="askGigaMesh" />
+                </span>
+                <input
+                  className="gm-input"
+                  style={{ flex: '1 1 280px' }}
+                  placeholder="Ask anything: 'Is AustinPlant safe?', 'How is our compliance?', 'Any vendor access?'"
+                  value={askText}
+                  onChange={(e) => setAskText(e.target.value)}
+                />
+                <button type="submit" className="gm-btn gm-btn-primary" disabled={busy}>
+                  Ask
+                </button>
+              </form>
+              {copilotReply && (
+                <div className="gm-item-box">
+                  <strong style={{ fontSize: 13 }}>{copilotReply.answer}</strong>
+                  {copilotReply.grounded_facts.length > 0 && (
+                    <div className="gm-muted" style={{ fontSize: 11.5, marginTop: 4 }}>
+                      {copilotReply.grounded_facts.join(' · ')}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

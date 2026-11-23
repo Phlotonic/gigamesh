@@ -684,6 +684,143 @@ def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | No
         verdicts = engine.uns.simulate_enterprise_uns()
         return {"verdicts": [v.model_dump(mode="json") for v in verdicts]}
 
+    @app.post("/api/uns/contracts")
+    def uns_upsert_contract(payload: dict[str, Any]) -> dict[str, Any]:
+        from gigamesh.integrations.uns import UnsDataContract
+
+        contract = engine.uns.register_data_contract(UnsDataContract(**payload))
+        return contract.model_dump(mode="json")
+
+    # ------------------------------------------------------------------
+    # Passive Multi-Protocol OT DPI & Purdue 0-5 Risk Inventory
+    # ------------------------------------------------------------------
+    @app.get("/api/ot-dpi/status")
+    def ot_dpi_status() -> dict[str, Any]:
+        return engine.ot_dpi.status()
+
+    @app.post("/api/ot-dpi/inspect")
+    def ot_dpi_inspect(payload: dict[str, Any]) -> dict[str, Any]:
+        from gigamesh.integrations.ot_dpi_inventory import OtDpiFrameInput
+
+        return engine.ot_dpi.inspect_dpi_frame(OtDpiFrameInput(**payload)).model_dump(mode="json")
+
+    @app.post("/api/ot-dpi/simulate")
+    def ot_dpi_simulate() -> dict[str, Any]:
+        alerts = engine.ot_dpi.simulate_ot_protocol_attacks()
+        return {"alerts": [a.model_dump(mode="json") for a in alerts]}
+
+    @app.post("/api/ot-dpi/zone-policies/{policy_id}/mode")
+    def ot_dpi_zone_mode(policy_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            pol = engine.ot_dpi.set_zone_policy_mode(policy_id, str(payload.get("mode", "dry_run")))
+            return pol.model_dump(mode="json")
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=f"Unknown zone policy {policy_id}") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # ------------------------------------------------------------------
+    # Zero-Trust Just-in-Time Vendor Secure Remote Access (SRA)
+    # ------------------------------------------------------------------
+    @app.get("/api/sra/status")
+    def sra_status() -> dict[str, Any]:
+        return engine.sra.status()
+
+    @app.post("/api/sra/request")
+    def sra_request(payload: dict[str, Any]) -> dict[str, Any]:
+        from gigamesh.integrations.secure_remote_access import SraSessionRequest
+
+        return engine.sra.request_jit_session(SraSessionRequest(**payload)).model_dump(mode="json")
+
+    @app.post("/api/sra/sessions/{session_id}/approve")
+    def sra_approve(session_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        try:
+            approver = str((payload or {}).get("approver", "plant-lead"))
+            return engine.sra.approve_and_activate(session_id, approver=approver).model_dump(mode="json")
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=f"Unknown SRA session {session_id}") from exc
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+    @app.post("/api/sra/sessions/{session_id}/command")
+    def sra_command(session_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return engine.sra.record_session_command(session_id, str(payload.get("command", ""))).model_dump(mode="json")
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=f"Unknown SRA session {session_id}") from exc
+
+    @app.post("/api/sra/sessions/{session_id}/kill")
+    def sra_kill(session_id: str) -> dict[str, Any]:
+        try:
+            return engine.sra.kill_session(session_id).model_dump(mode="json")
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=f"Unknown SRA session {session_id}") from exc
+
+    # ------------------------------------------------------------------
+    # Inline AI Runtime Gateway, AI-SPM, DSPM & Automated Red-Teaming
+    # ------------------------------------------------------------------
+    @app.get("/api/ai-gateway/status")
+    def ai_gateway_status() -> dict[str, Any]:
+        return engine.ai_gateway.status()
+
+    @app.post("/api/ai-gateway/inspect")
+    def ai_gateway_inspect(payload: dict[str, Any]) -> dict[str, Any]:
+        from gigamesh.integrations.ai_gateway_spm import AiGatewayInspectRequest
+
+        return engine.ai_gateway.inspect_ai_traffic(AiGatewayInspectRequest(**payload)).model_dump(mode="json")
+
+    @app.post("/api/ai-gateway/red-team/run")
+    def ai_gateway_red_team() -> dict[str, Any]:
+        return engine.ai_gateway.run_automated_red_team().model_dump(mode="json")
+
+    # ------------------------------------------------------------------
+    # Continuous 5-Framework Compliance, MITRE Triple-Matrix, OCSF & Sigma
+    # ------------------------------------------------------------------
+    @app.get("/api/compliance/status")
+    def compliance_status() -> dict[str, Any]:
+        return engine.compliance.evaluate_compliance()
+
+    @app.get("/api/compliance/ocsf")
+    def compliance_ocsf(limit: int = 25) -> dict[str, Any]:
+        return engine.compliance.export_ocsf_events(limit=limit)
+
+    @app.post("/api/compliance/sigma")
+    def compliance_add_sigma(payload: dict[str, Any]) -> dict[str, Any]:
+        from gigamesh.integrations.compliance_suite import SigmaRuleRecord
+
+        return engine.compliance.add_sigma_rule(SigmaRuleRecord(**payload)).model_dump(mode="json")
+
+    # ------------------------------------------------------------------
+    # Air-Gapped 'Ask GigaMesh' Copilot & Declarative SOAR Playbooks
+    # ------------------------------------------------------------------
+    @app.get("/api/soar/status")
+    def soar_status() -> dict[str, Any]:
+        return engine.soar_copilot.status()
+
+    @app.post("/api/soar/playbooks/{playbook_id}/run")
+    def soar_run_playbook(playbook_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        body = payload or {}
+        try:
+            rec = engine.soar_copilot.run_playbook(
+                playbook_id,
+                target=str(body.get("target", "AustinPlant")),
+                dry_run=bool(body.get("dry_run", True)),
+            )
+            return rec.model_dump(mode="json")
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=f"Unknown playbook {playbook_id}") from exc
+
+    @app.post("/api/soar/executions/{execution_id}/rollback")
+    def soar_rollback(execution_id: str) -> dict[str, Any]:
+        try:
+            return engine.soar_copilot.rollback_execution(execution_id).model_dump(mode="json")
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=f"Unknown execution {execution_id}") from exc
+
+    @app.post("/api/copilot/ask")
+    def copilot_ask(payload: dict[str, Any]) -> dict[str, Any]:
+        return engine.soar_copilot.ask_copilot(str(payload.get("question", "")))
+
     # ------------------------------------------------------------------
     # Live WebSocket Stream
     # ------------------------------------------------------------------

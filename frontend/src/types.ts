@@ -716,6 +716,19 @@ export interface UnsSecurityTwinEvent {
   retained: boolean;
 }
 
+export interface UnsDataContract {
+  contract_id: string;
+  name: string;
+  version: string;
+  topic_pattern: string;
+  expected_datatype: string;
+  unit: string;
+  valid_min: number | null;
+  valid_max: number | null;
+  strict_reject_on_drift: boolean;
+  violations_count: number;
+}
+
 export interface UnsStatus {
   enterprise: string;
   sites: string[];
@@ -723,10 +736,189 @@ export interface UnsStatus {
   total_policies: number;
   active_lockdowns: string[];
   policies: UnsPolicyRule[];
+  data_contracts?: UnsDataContract[];
+  schema_violations?: Array<{ timestamp: string; topic: string; value: unknown; violations: string[]; rejected: boolean }>;
   sparkplug_to_uns_map: Record<string, string>;
   recent_verdicts: UnsPublishVerdict[];
   security_twin_feed: UnsSecurityTwinEvent[];
   tree: UnsTreeNode;
+}
+
+export interface OtDpiAsset {
+  asset_id: string;
+  name: string;
+  site: string;
+  purdue_level: number;
+  ip_address: string;
+  vendor: string;
+  model: string;
+  firmware: string;
+  protocols: string[];
+  digital_physics_guarded: boolean;
+  base_risk_score: number;
+  effective_risk_score: number;
+  visibility_completeness: number;
+  visibility_gaps: string[];
+  vulnerabilities: Array<{ cve_id: string; cvss: number; epss: number; cisa_kev: boolean; summary: string }>;
+}
+
+export interface OtDpiStatus {
+  supported_protocols: string[];
+  total_assets: number;
+  purdue_distribution: Record<string, number>;
+  avg_base_risk: number;
+  avg_effective_risk: number;
+  virtual_patch_risk_reduction_pct: number;
+  visibility_gap_assets: string[];
+  assets: OtDpiAsset[];
+  zone_policies: Array<{
+    policy_id: string;
+    name: string;
+    src_purdue_level: number;
+    dst_purdue_level: number;
+    allowed_protocols: string[];
+    mode: string;
+    dry_run_would_block_count: number;
+    dry_run_would_allow_count: number;
+  }>;
+  recent_alerts: Array<{
+    alert_id: string;
+    timestamp: string;
+    protocol: string;
+    src_ip: string;
+    dst_ip: string;
+    function_name: string;
+    severity: string;
+    verdict: string;
+    mitre_ics_technique: string;
+    reasons: string[];
+  }>;
+}
+
+export interface SraSession {
+  session_id: string;
+  vendor_name: string;
+  contractor_email: string;
+  site: string;
+  target_uns_asset: string;
+  access_mode: string;
+  duration_minutes: number;
+  justification: string;
+  status: string;
+  quorum_id: string | null;
+  transcript: Array<{ seq: number; command: string; allowed: boolean; reason: string; entry_hash: string }>;
+}
+
+export interface SraStatus {
+  total_sessions: number;
+  active_sessions: number;
+  pending_sessions: number;
+  killed_sessions: number;
+  sessions: SraSession[];
+}
+
+export interface AiGatewayStatus {
+  approved_providers: string[];
+  stats: Record<string, number>;
+  assets: Array<{
+    asset_id: string;
+    name: string;
+    kind: string;
+    provider: string;
+    approved: boolean;
+    dspm_guarded: boolean;
+    risk_level: string;
+    findings: string[];
+  }>;
+  recent_verdicts: Array<{
+    request_id: string;
+    provider: string;
+    model: string;
+    agent_id: string;
+    decision: string;
+    latency_us: number;
+    redactions_applied: string[];
+    sanitized_content: string;
+    reasons: string[];
+  }>;
+  last_red_team: {
+    campaign_id: string;
+    total_probes: number;
+    blocked_probes: number;
+    resilience_score_pct: number;
+    results: Array<{
+      probe_id: string;
+      category: string;
+      attack_name: string;
+      blocked: boolean;
+      latency_ms: number;
+      defense_layer: string;
+      detail: string;
+    }>;
+  } | null;
+}
+
+export interface ComplianceStatus {
+  generated_at: string;
+  overall_readiness_pct: number;
+  passing_controls: number;
+  total_controls: number;
+  frameworks: Array<{
+    framework: string;
+    full_name: string;
+    passing_controls: number;
+    total_controls: number;
+    readiness_pct: number;
+    controls: Array<{
+      control_id: string;
+      title: string;
+      status: string;
+      evidence_summary: string;
+      automated_source: string;
+    }>;
+  }>;
+  mitre_triple_matrix: {
+    enterprise_attack: Array<{ id: string; name: string; coverage: string; layer: string }>;
+    ics_attack: Array<{ id: string; name: string; coverage: string; layer: string }>;
+    atlas_ai: Array<{ id: string; name: string; coverage: string; layer: string }>;
+  };
+  sigma_rules: Array<{
+    rule_id: string;
+    title: string;
+    level: string;
+    logsource: string;
+    mitre_tags: string[];
+    keywords: string[];
+    matches_count: number;
+  }>;
+}
+
+export interface SoarStatus {
+  playbooks: Array<{
+    playbook_id: string;
+    name: string;
+    category: string;
+    plain_english_summary: string;
+    steps: string[];
+  }>;
+  recent_executions: Array<{
+    execution_id: string;
+    playbook_id: string;
+    playbook_name: string;
+    target: string;
+    dry_run: boolean;
+    status: string;
+    actions_log: string[];
+  }>;
+}
+
+export interface CopilotAnswer {
+  question: string;
+  mode: string;
+  answer: string;
+  grounded_facts: string[];
+  recommended_actions: string[];
+  answered_at: string;
 }
 
 

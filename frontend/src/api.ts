@@ -30,6 +30,12 @@ import type {
   UnsPolicyRule,
   UnsPublishVerdict,
   UnsStatus,
+  OtDpiStatus,
+  SraStatus,
+  AiGatewayStatus,
+  ComplianceStatus,
+  SoarStatus,
+  CopilotAnswer,
 } from './types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -200,4 +206,44 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  getOtDpiStatus: () => request<OtDpiStatus>('/api/ot-dpi/status'),
+  simulateOtDpi: () => request<{ alerts: unknown[] }>('/api/ot-dpi/simulate', { method: 'POST' }),
+  setOtZonePolicyMode: (policyId: string, mode: 'dry_run' | 'enforced') =>
+    request<Record<string, unknown>>(`/api/ot-dpi/zone-policies/${encodeURIComponent(policyId)}/mode`, {
+      method: 'POST',
+      body: JSON.stringify({ mode }),
+    }),
+  getSraStatus: () => request<SraStatus>('/api/sra/status'),
+  requestSraSession: (payload: Record<string, unknown>) =>
+    request<Record<string, unknown>>('/api/sra/request', { method: 'POST', body: JSON.stringify(payload) }),
+  approveSraSession: (sessionId: string) =>
+    request<Record<string, unknown>>(`/api/sra/sessions/${encodeURIComponent(sessionId)}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ approver: 'plant-lead' }),
+    }),
+  runSraCommand: (sessionId: string, command: string) =>
+    request<Record<string, unknown>>(`/api/sra/sessions/${encodeURIComponent(sessionId)}/command`, {
+      method: 'POST',
+      body: JSON.stringify({ command }),
+    }),
+  killSraSession: (sessionId: string) =>
+    request<Record<string, unknown>>(`/api/sra/sessions/${encodeURIComponent(sessionId)}/kill`, { method: 'POST' }),
+  getAiGatewayStatus: () => request<AiGatewayStatus>('/api/ai-gateway/status'),
+  inspectAiTraffic: (payload: Record<string, unknown>) =>
+    request<Record<string, unknown>>('/api/ai-gateway/inspect', { method: 'POST', body: JSON.stringify(payload) }),
+  runAiRedTeam: () => request<Record<string, unknown>>('/api/ai-gateway/red-team/run', { method: 'POST' }),
+  getComplianceStatus: () => request<ComplianceStatus>('/api/compliance/status'),
+  exportOcsfEvents: () => request<Record<string, unknown>>('/api/compliance/ocsf'),
+  getSoarStatus: () => request<SoarStatus>('/api/soar/status'),
+  runSoarPlaybook: (playbookId: string, target: string, dry_run: boolean) =>
+    request<Record<string, unknown>>(`/api/soar/playbooks/${encodeURIComponent(playbookId)}/run`, {
+      method: 'POST',
+      body: JSON.stringify({ target, dry_run }),
+    }),
+  rollbackSoarExecution: (executionId: string) =>
+    request<Record<string, unknown>>(`/api/soar/executions/${encodeURIComponent(executionId)}/rollback`, {
+      method: 'POST',
+    }),
+  askCopilot: (question: string) =>
+    request<CopilotAnswer>('/api/copilot/ask', { method: 'POST', body: JSON.stringify({ question }) }),
 };

@@ -154,6 +154,57 @@ class UnsSecurityTwinEvent(BaseModel):
     retained: bool = True
 
 
+class UnsDataContract(BaseModel):
+    """Versioned UNS Schema & Data Contract attached to any MQTT wildcard topic (EMQX/HighByte-grade governance)."""
+
+    contract_id: str = Field(default_factory=lambda: f"unsc-{uuid4().hex[:8]}")
+    name: str
+    version: str = "1.0.0"
+    topic_pattern: str
+    expected_datatype: str = "Double"  # Double | Int | Boolean | String | JSON
+    unit: str = ""
+    valid_min: float | None = None
+    valid_max: float | None = None
+    strict_reject_on_drift: bool = False  # False = fail-open alert for telemetry; True = quarantine
+    violations_count: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+def default_uns_contracts(enterprise: str = "QuanumisCorp") -> list[UnsDataContract]:
+    return [
+        UnsDataContract(
+            contract_id="unsc-boiler-pressure-v1",
+            name="Boiler Pressure Telemetry Contract",
+            version="1.0.0",
+            topic_pattern=f"{enterprise}/+/ThermalArea/+/+/+/Telemetry/PressureSetpointPSI",
+            expected_datatype="Double",
+            unit="PSI",
+            valid_min=0.0,
+            valid_max=300.0,
+            strict_reject_on_drift=False,
+        ),
+        UnsDataContract(
+            contract_id="unsc-conveyor-speed-v1",
+            name="Assembly Conveyor Speed Contract",
+            version="1.0.0",
+            topic_pattern=f"{enterprise}/+/AssemblyArea/+/+/+/Telemetry/ConveyorSpeedRPM",
+            expected_datatype="Double",
+            unit="RPM",
+            valid_min=0.0,
+            valid_max=250.0,
+            strict_reject_on_drift=False,
+        ),
+        UnsDataContract(
+            contract_id="unsc-interlock-bool-v1",
+            name="Safety Interlock Boolean Integrity Contract",
+            version="1.0.0",
+            topic_pattern=f"{enterprise}/+/+/+/+/+/State/EmergencyReliefInterlock",
+            expected_datatype="Boolean",
+            strict_reject_on_drift=True,
+        ),
+    ]
+
+
 def default_uns_policies(enterprise: str = "QuanumisCorp") -> list[UnsPolicyRule]:
     return [
         UnsPolicyRule(
@@ -201,7 +252,7 @@ def default_uns_policies(enterprise: str = "QuanumisCorp") -> list[UnsPolicyRule
 
 
 class UnifiedNamespaceHub:
-    """Canonical ISA-95 + Sparkplug B Unified Namespace (S-UNS) with wildcard policy inheritance."""
+    """Canonical ISA-95 + Sparkplug B Unified Namespace (S-UNS) with wildcard policy inheritance & Data Contracts."""
 
     def __init__(
         self,
@@ -220,6 +271,10 @@ class UnifiedNamespaceHub:
         self.policies: dict[str, UnsPolicyRule] = {
             p.policy_id: p for p in default_uns_policies(enterprise)
         }
+        self.data_contracts: dict[str, UnsDataContract] = {
+            c.contract_id: c for c in default_uns_contracts(enterprise)
+        }
+        self.schema_violations: list[dict[str, Any]] = []
         self.nodes: dict[str, UnsNodeState] = {}
         self.verdicts: list[UnsPublishVerdict] = []
         self.security_twin_feed: list[UnsSecurityTwinEvent] = []
@@ -380,6 +435,48 @@ class UnifiedNamespaceHub:
         )
         return rule
 
+    def register_data_contract(self, contract: UnsDataContract) -> UnsDataContract:
+        with self._lock:
+            self.data_contracts[contract.contract_id] = contract
+        self.engine.broadcast("uns_updated", {"event": "contract_registered", "contract_id": contract.contract_id})
+        return contract
+
+    def validate_against_contracts(self, topic: str, value: Any, datatype: str) -> tuple[list[str], bool]:
+        """Validate payload against all matching versioned UNS Data Contracts. Returns (violations, strict_reject)."""
+        violations: list[str] = []
+        strict_reject = False
+        with self._lock:
+            for c in self.data_contracts.values():
+                if not mqtt_topic_matches(c.topic_pattern, topic):
+                    continue
+                if c.expected_datatype.lower() == "boolean" and not isinstance(value, bool):
+                    violations.append(f"schema_drift:{c.contract_id}@v{c.version}:expected_Boolean_got_{type(value).__name__}")
+                elif c.expected_datatype.lower() in ("double", "int") and (isinstance(value, bool) or not isinstance(value, (int, float))):
+                    violations.append(f"schema_drift:{c.contract_id}@v{c.version}:expected_{c.expected_datatype}_got_{type(value).__name__}")
+                elif isinstance(value, (int, float)) and not isinstance(value, bool):
+                    fv = float(value)
+                    if c.valid_min is not None and fv < c.valid_min:
+                        violations.append(f"contract_range_underflow:{c.contract_id}:{fv}<{c.valid_min}{c.unit}")
+                    if c.valid_max is not None and fv > c.valid_max:
+                        violations.append(f"contract_range_overflow:{c.contract_id}:{fv}>{c.valid_max}{c.unit}")
+                if violations:
+                    c.violations_count += 1
+                    if c.strict_reject_on_drift:
+                        strict_reject = True
+            if violations:
+                self.schema_violations.append(
+                    {
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "topic": topic,
+                        "value": value,
+                        "datatype": datatype,
+                        "violations": list(violations),
+                        "rejected": strict_reject,
+                    }
+                )
+                self.schema_violations = self.schema_violations[-100:]
+        return violations, strict_reject
+
     # ------------------------------------------------------------------
     # Publish / Inspect ISA-95 Semantic UNS Messages
     # ------------------------------------------------------------------
@@ -390,8 +487,26 @@ class UnifiedNamespaceHub:
         matched, eff = self.resolve_effective_policies(msg.topic)
         policy_ids = [p.policy_id for p in matched]
 
+        # 0. UNS Versioned Data Contract & Schema Validation (EMQX/HighByte-grade governance)
+        contract_violations, strict_reject = self.validate_against_contracts(msg.topic, msg.value, msg.datatype)
+        if contract_violations and strict_reject:
+            twin_topic = f"{parsed['enterprise']}/{parsed['site']}/Security/GigaMesh/SchemaDrift"
+            self._publish_security_twin(twin_topic, {"decision": "block", "topic": msg.topic, "violations": contract_violations})
+            return self._record_verdict(
+                UnsPublishVerdict(
+                    topic=msg.topic,
+                    layer=parsed["layer"],
+                    mode="inline_fail_closed",
+                    decision="block",
+                    matched_policies=policy_ids,
+                    reasons=contract_violations,
+                    security_twin_topic=twin_topic,
+                )
+            )
+
         # 1. Fail-Open Telemetry / State / Security path (never stalls visibility)
         if not is_command:
+            sec_state = "alert" if contract_violations else "healthy"
             with self._lock:
                 self._upsert_node_unlocked(
                     topic=msg.topic,
@@ -399,16 +514,16 @@ class UnifiedNamespaceHub:
                     datatype=msg.datatype,
                     sender=msg.sender_id,
                     protocol=source_protocol,
-                    security_state="healthy",
+                    security_state=sec_state,
                     matched_policies=policy_ids,
                 )
             verdict = UnsPublishVerdict(
                 topic=msg.topic,
                 layer=parsed["layer"],
                 mode="passive_fail_open",
-                decision="allow",
+                decision="allow_with_alert" if contract_violations else "allow",
                 matched_policies=policy_ids,
-                reasons=["uns_telemetry_updated"],
+                reasons=contract_violations or ["uns_telemetry_updated"],
             )
             return self._record_verdict(verdict)
 
@@ -781,6 +896,8 @@ class UnifiedNamespaceHub:
                 "total_policies": len(self.policies),
                 "active_lockdowns": [p.topic_pattern for p in self.policies.values() if p.enabled and p.read_only_lockdown],
                 "policies": [p.model_dump(mode="json") for p in self.policies.values()],
+                "data_contracts": [c.model_dump(mode="json") for c in self.data_contracts.values()],
+                "schema_violations": list(reversed(self.schema_violations[-20:])),
                 "sparkplug_to_uns_map": dict(self.sparkplug_to_uns_map),
                 "recent_verdicts": [v.model_dump(mode="json") for v in reversed(self.verdicts[-30:])],
                 "security_twin_feed": [s.model_dump(mode="json") for s in reversed(self.security_twin_feed[-20:])],

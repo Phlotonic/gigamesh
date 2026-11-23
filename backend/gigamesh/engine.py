@@ -20,10 +20,15 @@ from gigamesh.detectors.registry import DetectorRegistry
 from gigamesh.evolution.autopoiesis import AutopoiesisEngine
 from gigamesh.evolution.evaluator import OptionEvaluator
 from gigamesh.human_sec.hub import HumanSecurityHub
+from gigamesh.integrations.ai_gateway_spm import AiGatewaySpmManager
 from gigamesh.integrations.aws_toolkit import AwsAgentToolkitBridge
+from gigamesh.integrations.compliance_suite import ComplianceAndStandardsSuite
 from gigamesh.integrations.edge_fleet import EdgeFleetManager
 from gigamesh.integrations.email_listener import EmailSecurityListener
 from gigamesh.integrations.mqtt_ot_middleware import MqttOtSecurityMiddleware
+from gigamesh.integrations.ot_dpi_inventory import OtDpiInventoryManager
+from gigamesh.integrations.secure_remote_access import SecureRemoteAccessBroker
+from gigamesh.integrations.soar_copilot import SoarCopilotEngine
 from gigamesh.integrations.threat_crawler import ThreatIntelCrawler
 from gigamesh.integrations.uns import UnifiedNamespaceHub
 from gigamesh.models.asef import AsefEvent, IncidentCase, Severity
@@ -118,6 +123,11 @@ class GigaMeshEngine:
             broker_port=self.config.mqtt_broker_port,
         )
         self.edge_fleet = EdgeFleetManager(engine=self)
+        self.ot_dpi = OtDpiInventoryManager(engine=self)
+        self.sra = SecureRemoteAccessBroker(engine=self)
+        self.ai_gateway = AiGatewaySpmManager(engine=self)
+        self.compliance = ComplianceAndStandardsSuite(engine=self)
+        self.soar_copilot = SoarCopilotEngine(engine=self)
 
     # ------------------------------------------------------------------
     # Real-time WebSocket Pub/Sub
@@ -610,8 +620,16 @@ class GigaMeshEngine:
                 "sites": sorted({n.site for n in self.uns.nodes.values()}),
                 "total_nodes": len(self.uns.nodes),
                 "total_policies": len(self.uns.policies),
+                "data_contracts": len(self.uns.data_contracts),
                 "active_lockdowns": [
                     p.topic_pattern for p in self.uns.policies.values() if p.enabled and p.read_only_lockdown
                 ],
+            },
+            "enterprise_suite": {
+                "ot_dpi_assets": len(self.ot_dpi.assets),
+                "active_sra_sessions": sum(1 for s in self.sra.sessions.values() if s.status == "active"),
+                "ai_gateway_inspected": self.ai_gateway.stats["total_inspected"],
+                "compliance_frameworks": 5,
+                "soar_playbooks": len(self.soar_copilot.playbooks),
             },
         }
