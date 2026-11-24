@@ -1,0 +1,51 @@
+name: GigaMesh Production CI/CD & Security Verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    name: Python Backend, Persistence, RBAC, Wire DPI & OWASP 30/30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build Rust Edge Binary for End-to-End Wire Tests
+        working-directory: edge/rust
+        run: cargo test && cargo build --release
+      - name: Install Backend Dependencies
+        run: pip install -r backend/requirements.txt
+      - name: Run Full Pytest Suite
+        env:
+          PYTHONPATH: backend
+        run: pytest -v backend/tests
+
+  frontend-build:
+    name: React PWA + TypeScript Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install & Build Frontend
+        working-directory: frontend
+        run: npm ci && npm run build
+
+  docker-build:
+    name: Production Multi-Stage Docker Image Verification
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-build]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Hardened Non-Root Container
+        run: docker build -t gigamesh:ci .

@@ -12,6 +12,10 @@
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
+use std::io::{self, Read, Write};
+use std::net::{TcpListener, TcpStream};
+use std::sync::{Arc, Mutex};
+use std::thread;
 use std::time::Instant;
 
 // ---------------------------------------------------------------------------
@@ -503,10 +507,169 @@ fn run_uns_selftest(secret: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+fn read_mqtt_packet<R: Read>(reader: &mut R) -> io::Result<(u8, Vec<u8>)> {
+    let mut hdr = [0u8; 1];
+    reader.read_exact(&mut hdr)?;
+    let mut rem_len: usize = 0;
+    let mut mult: usize = 1;
+    let mut raw = Vec::with_capacity(64);
+    raw.push(hdr[0]);
+    for _ in 0..4 {
+        let mut b = [0u8; 1];
+        reader.read_exact(&mut b)?;
+        raw.push(b[0]);
+        rem_len += ((b[0] & 0x7F) as usize) * mult;
+        if (b[0] & 0x80) == 0 {
+            break;
+        }
+        mult *= 128;
+    }
+    if rem_len > 2 * 1024 * 1024 {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "MQTT packet exceeds 2MB cap"));
+    }
+    let body_start = raw.len();
+    raw.resize(body_start + rem_len, 0);
+    reader.read_exact(&mut raw[body_start..])?;
+    Ok((hdr[0], raw))
+}
+
+fn parse_mqtt_publish(hdr: u8, raw: &[u8]) -> Option<(String, String)> {
+    // Skip fixed header + remaining-length varint
+    let mut idx = 1usize;
+    while idx < raw.len() && (raw[idx] & 0x80) != 0 {
+        idx += 1;
+    }
+    idx += 1; // step past last remaining-length byte
+    if idx + 2 > raw.len() {
+        return None;
+    }
+    let topic_len = u16::from_be_bytes([raw[idx], raw[idx + 1]]) as usize;
+    idx += 2;
+    if idx + topic_len > raw.len() {
+        return None;
+    }
+    let topic = String::from_utf8_lossy(&raw[idx..idx + topic_len]).to_string();
+    idx += topic_len;
+    let qos = (hdr >> 1) & 0x03;
+    if qos > 0 {
+        if idx + 2 > raw.len() {
+            return None;
+        }
+        idx += 2; // skip packet identifier
+    }
+    let payload = String::from_utf8_lossy(&raw[idx..]).to_string();
+    Some((topic, payload))
+}
+
+fn decode_hex32(hex_str: &str) -> [u8; 32] {
+    let mut out = [0u8; 32];
+    let bytes = hex_str.as_bytes();
+    for i in 0..32 {
+        if 2 * i + 1 < bytes.len() {
+            if let Ok(v) = u8::from_str_radix(&hex_str[2 * i..2 * i + 2], 16) {
+                out[i] = v;
+            }
+        }
+    }
+    out
+}
+
+fn extract_json_f64(raw: &str, key: &str) -> Option<f64> {
+    let pat = format!("\"{}\"", key);
+    let idx = raw.find(&pat)?;
+    let rest = &raw[idx + pat.len()..];
+    let colon = rest.find(':')?;
+    let after = rest[colon + 1..].trim_start();
+    let end = after.find(|c: char| !c.is_ascii_digit() && c != '.' && c != '-').unwrap_or(after.len());
+    after[..end].parse::<f64>().ok()
+}
+
+fn run_mqtt_tcp_proxy(listen_addr: &str, upstream_addr: &str, secret: &[u8]) -> Result<(), String> {
+    let listener = TcpListener::bind(listen_addr).map_err(|e| format!("bind {}: {}", listen_addr, e))?;
+    let engine = Arc::new(Mutex::new(EdgeEngine::new(secret)));
+    println!("GIGAMESH_EDGE_PROXY_READY listen={} upstream={}", listen_addr, upstream_addr);
+    let _ = io::stdout().flush();
+
+    for stream in listener.incoming() {
+        let mut client_r = match stream {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        let upstream_str = upstream_addr.to_string();
+        let eng_ref = Arc::clone(&engine);
+
+        thread::spawn(move || {
+            let mut up_w = match TcpStream::connect(&upstream_str) {
+                Ok(u) => u,
+                Err(_) => return,
+            };
+            let mut up_r = match up_w.try_clone() {
+                Ok(u) => u,
+                Err(_) => return,
+            };
+            let mut client_w = match client_r.try_clone() {
+                Ok(c) => c,
+                Err(_) => return,
+            };
+
+            // Server -> Client transparent forwarder
+            let rev = thread::spawn(move || {
+                let mut buf = [0u8; 4096];
+                while let Ok(n) = up_r.read(&mut buf) {
+                    if n == 0 || client_w.write_all(&buf[..n]).is_err() {
+                        break;
+                    }
+                }
+            });
+
+            // Client -> Server inline MQTT wire inspection (Sparkplug B + ISA-95 UNS)
+            while let Ok((hdr, raw)) = read_mqtt_packet(&mut client_r) {
+                let pkt_type = hdr >> 4;
+                let mut forward = true;
+                if pkt_type == 3 {
+                    if let Some((topic, payload)) = parse_mqtt_publish(hdr, &raw) {
+                        let sender = extract_json_str(&payload, "sender_id").unwrap_or("mqtt-client");
+                        let nonce = extract_json_str(&payload, "nonce").unwrap_or("");
+                        let sig_hex = extract_json_str(&payload, "signature").unwrap_or("");
+                        let sig_bytes = decode_hex32(sig_hex);
+                        let metric = extract_json_str(&payload, "metric")
+                            .unwrap_or_else(|| topic.rsplit('/').next().unwrap_or("value"));
+                        let val = extract_json_f64(&payload, "value")
+                            .or_else(|| payload.trim().parse::<f64>().ok())
+                            .unwrap_or(0.0);
+                        let ai_tainted = payload.contains("\"ai_tainted\":true") || payload.contains("\"it_tainted\":true");
+
+                        let verdict = if let Ok(mut guard) = eng_ref.lock() {
+                            guard.inspect(&topic, sender, nonce, metric, val, &sig_bytes, ai_tainted)
+                        } else {
+                            2 // Fail-closed on lock poison
+                        };
+                        if verdict == 2 {
+                            forward = false;
+                            eprintln!("[GIGAMESH-PROXY BLOCKED] topic={} sender={}", topic, sender);
+                        }
+                    }
+                }
+                if forward && up_w.write_all(&raw).is_err() {
+                    break;
+                }
+            }
+            let _ = up_w.shutdown(std::net::Shutdown::Both);
+            let _ = rev.join();
+        });
+    }
+    Ok(())
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let secret = b"gigamesh-edge-offline-bundle-v1";
+    let secret_env = env::var("GIGAMESH_EDGE_BUNDLE_SECRET").unwrap_or_else(|_| "gigamesh-edge-offline-bundle-v1".to_string());
+    let secret = secret_env.as_bytes();
     let mut bench_n: usize = 100_000;
+    let mut proxy_mode = false;
+    let mut listen_addr = "0.0.0.0:1883".to_string();
+    let mut upstream_addr = "127.0.0.1:1884".to_string();
+    let mut bundle_path: Option<String> = None;
 
     let mut i = 1;
     while i < args.len() {
@@ -522,11 +685,36 @@ fn main() {
                 std::process::exit(1);
             }
             return;
+        } else if args[i] == "--proxy" {
+            proxy_mode = true;
+        } else if args[i] == "--listen" && i + 1 < args.len() {
+            listen_addr = args[i + 1].clone();
+            i += 1;
+        } else if args[i] == "--upstream" && i + 1 < args.len() {
+            upstream_addr = args[i + 1].clone();
+            i += 1;
+        } else if args[i] == "--bundle" && i + 1 < args.len() {
+            bundle_path = Some(args[i + 1].clone());
+            i += 1;
         } else if args[i] == "--bench" && i + 1 < args.len() {
             bench_n = args[i + 1].parse().unwrap_or(100_000);
             i += 1;
         }
         i += 1;
+    }
+
+    if proxy_mode {
+        if let Some(ref bp) = bundle_path {
+            if let Err(e) = verify_bundle_file(bp, secret) {
+                eprintln!("FATAL: refusing to start proxy with invalid bundle: {}", e);
+                std::process::exit(1);
+            }
+        }
+        if let Err(e) = run_mqtt_tcp_proxy(&listen_addr, &upstream_addr, secret) {
+            eprintln!("ERR: {}", e);
+            std::process::exit(1);
+        }
+        return;
     }
 
     let mut eng = EdgeEngine::new(secret);
@@ -585,4 +773,28 @@ fn main() {
         "{{\"runtime\":\"rust-dual-uns\",\"messages\":{},\"elapsed_ms\":{:.3},\"throughput\":{:.0},\"p50_ns\":{},\"p95_ns\":{},\"p99_ns\":{},\"p999_ns\":{},\"allowed\":{},\"alerts\":{},\"blocked\":{}}}",
         bench_n, elapsed_ms, tps, p50, p95, p99, p999, allowed, alerts, blocked
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_uns_and_wildcards() {
+        assert!(run_uns_selftest(b"gigamesh-edge-offline-bundle-v1").is_ok());
+    }
+
+    #[test]
+    fn test_mqtt_publish_wire_parser() {
+        let topic = b"QuanumisCorp/AustinPlant/ThermalArea/Line3/BoilerCell/BoilerPLC01/Telemetry/PressureSetpointPSI";
+        let payload = b"{\"value\":98.5}";
+        let rem_len = 2 + topic.len() + payload.len();
+        let mut pkt = vec![0x30u8, rem_len as u8];
+        pkt.extend_from_slice(&(topic.len() as u16).to_be_bytes());
+        pkt.extend_from_slice(topic);
+        pkt.extend_from_slice(payload);
+        let (t, p) = parse_mqtt_publish(0x30, &pkt).expect("parse publish");
+        assert!(t.ends_with("PressureSetpointPSI"));
+        assert_eq!(extract_json_f64(&p, "value"), Some(98.5));
+    }
 }

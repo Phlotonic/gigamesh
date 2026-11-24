@@ -28,13 +28,23 @@ class SecurityAuditEntry(BaseModel):
 
 
 class HashChainedSecurityAuditLog:
-    """Append-only SHA-256 hash-chained audit trail for security events & fail-closed denials."""
+    """Append-only SHA-256 hash-chained audit trail persisted durably across restarts."""
 
-    def __init__(self, max_entries: int = 2000) -> None:
+    def __init__(self, max_entries: int = 2000, state_store: Any = None) -> None:
         self._lock = threading.RLock()
+        self._state_store = state_store
         self._entries: list[SecurityAuditEntry] = []
         self._max_entries = max_entries
         self._head_hash = "0" * 64
+        self._seq = 0
+        if self._state_store is not None:
+            for row in self._state_store.load_audit_entries():
+                entry = SecurityAuditEntry(**row)
+                self._entries.append(entry)
+                self._head_hash = entry.entry_hash
+                self._seq += 1
+            if len(self._entries) > self._max_entries:
+                self._entries = self._entries[-self._max_entries :]
 
     def record(
         self,
@@ -77,7 +87,10 @@ class HashChainedSecurityAuditLog:
                 entry_hash=digest,
             )
             self._head_hash = digest
+            self._seq += 1
             self._entries.append(entry)
+            if self._state_store is not None:
+                self._state_store.append_audit_entry(self._seq, entry.model_dump(mode="json"))
             if len(self._entries) > self._max_entries:
                 self._entries = self._entries[-self._max_entries :]
             return entry

@@ -286,6 +286,22 @@ class UnifiedNamespaceHub:
             "PlantAustin/EdgeNode01": f"{enterprise}/AustinPlant/ThermalArea/Line3/BoilerCell/EdgeNode01",
             "PlantMunich/EdgeNode02/RobotCell04": f"{enterprise}/MunichPlant/AssemblyArea/Line1/RobotCell/RobotCell04",
         }
+        self._load_or_seed_namespace()
+
+    def _load_or_seed_namespace(self) -> None:
+        if hasattr(self.engine, "state_store"):
+            for p_row in self.engine.state_store.load_uns_policies():
+                rule = UnsPolicyRule(**p_row)
+                self.policies[rule.policy_id] = rule
+            for c_row in self.engine.state_store.load_uns_contracts():
+                c = UnsDataContract(**c_row)
+                self.data_contracts[c.contract_id] = c
+            n_rows = self.engine.state_store.load_uns_nodes()
+            if n_rows:
+                for n_row in n_rows:
+                    node = UnsNodeState(**n_row)
+                    self.nodes[node.topic] = node
+                return
         self._seed_initial_namespace()
 
     def _seed_initial_namespace(self) -> None:
@@ -413,6 +429,8 @@ class UnifiedNamespaceHub:
     def upsert_policy(self, rule: UnsPolicyRule) -> UnsPolicyRule:
         with self._lock:
             self.policies[rule.policy_id] = rule
+        if hasattr(self.engine, "state_store"):
+            self.engine.state_store.save_uns_policy(rule.policy_id, rule.model_dump(mode="json"))
         self.engine.broadcast("uns_updated", {"event": "policy_updated", "policy_id": rule.policy_id})
         return rule
 
@@ -438,6 +456,8 @@ class UnifiedNamespaceHub:
     def register_data_contract(self, contract: UnsDataContract) -> UnsDataContract:
         with self._lock:
             self.data_contracts[contract.contract_id] = contract
+        if hasattr(self.engine, "state_store"):
+            self.engine.state_store.save_uns_contract(contract.contract_id, contract.model_dump(mode="json"))
         self.engine.broadcast("uns_updated", {"event": "contract_registered", "contract_id": contract.contract_id})
         return contract
 
@@ -769,7 +789,7 @@ class UnifiedNamespaceHub:
         matched_policies: list[str] | None = None,
     ) -> None:
         p = self.parse_isa95_topic(topic)
-        self.nodes[topic] = UnsNodeState(
+        node = UnsNodeState(
             topic=topic,
             enterprise=p["enterprise"],
             site=p["site"],
@@ -786,6 +806,9 @@ class UnifiedNamespaceHub:
             security_state=security_state,
             matched_policies=matched_policies or [],
         )
+        self.nodes[topic] = node
+        if hasattr(self.engine, "state_store"):
+            self.engine.state_store.save_uns_node(topic, node.model_dump(mode="json"))
 
     def _publish_security_twin(self, topic: str, payload: dict[str, Any]) -> None:
         ev = UnsSecurityTwinEvent(topic=topic, payload=payload)

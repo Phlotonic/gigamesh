@@ -74,6 +74,8 @@ class SignedOfflinePolicyBundle(BaseModel):
     pinned_birth_schemas: dict[str, str]
     bundle_sha256: str
     signature: str
+    ed25519_signature: str = ""
+    ed25519_public_key_hex: str = ""
 
 
 def _uns_seg(raw: str) -> str:
@@ -82,7 +84,7 @@ def _uns_seg(raw: str) -> str:
 
 
 class EdgeFleetManager:
-    """Enrolls multi-platform edge devices and compiles signed offline defense bundles."""
+    """Enrolls multi-platform edge devices and compiles Ed25519 + HMAC-SHA256 signed offline bundles."""
 
     def __init__(self, *, engine: GigaMeshEngine, signing_secret: bytes | None = None) -> None:
         self.engine = engine
@@ -91,7 +93,11 @@ class EdgeFleetManager:
         ).encode("utf-8")
         self._lock = threading.RLock()
         self.devices: dict[str, EdgeDeviceRecord] = {}
-        self._seed_demo_fleet()
+        self._load_or_seed_fleet()
+
+    def _persist_device(self, rec: EdgeDeviceRecord) -> None:
+        if hasattr(self.engine, "state_store"):
+            self.engine.state_store.save_edge_device(rec.device_id, rec.model_dump(mode="json"))
 
     def _project_device_to_uns(self, rec: EdgeDeviceRecord) -> None:
         if not hasattr(self.engine, "uns"):
@@ -114,7 +120,14 @@ class EdgeFleetManager:
             source_protocol="edge_fleet",
         )
 
-    def _seed_demo_fleet(self) -> None:
+    def _load_or_seed_fleet(self) -> None:
+        if hasattr(self.engine, "state_store"):
+            rows = self.engine.state_store.load_edge_devices()
+            if rows:
+                for row in rows:
+                    rec = EdgeDeviceRecord(**row)
+                    self.devices[rec.device_id] = rec
+                return
         # Provide initial ready-to-inspect reference entries for novice onboarding
         for name, plat, site, rt, caps, vpn, bio in [
             (
@@ -146,6 +159,7 @@ class EdgeFleetManager:
                 biometric_key_registered=bio,
             )
             self.devices[rec.device_id] = rec
+            self._persist_device(rec)
             self._project_device_to_uns(rec)
 
     def enroll_device(self, req: EdgeEnrollRequest) -> dict[str, Any]:
@@ -163,6 +177,7 @@ class EdgeFleetManager:
         )
         with self._lock:
             self.devices[rec.device_id] = rec
+        self._persist_device(rec)
         self._project_device_to_uns(rec)
         self.engine.security_audit_log.record(
             category="owasp_block",
@@ -191,7 +206,8 @@ class EdgeFleetManager:
                 dev.policy_version = req.policy_version
             dev.blocked_threats_local += max(0, req.blocked_threats_delta)
             dev.vpn_shield_active = req.vpn_shield_active
-            return dev
+        self._persist_device(dev)
+        return dev
 
     def revoke_device(self, device_id: str) -> EdgeDeviceRecord:
         with self._lock:
@@ -206,13 +222,13 @@ class EdgeFleetManager:
                 actor="operator",
                 summary=f"Revoked edge device credentials for {dev.device_name} ({device_id})",
             )
+        self._persist_device(dev)
         self._project_device_to_uns(dev)
         return dev
 
     def compile_signed_policy_bundle(self) -> SignedOfflinePolicyBundle:
-        """Compile an HMAC-SHA256-signed offline policy bundle from Champion + Threat Crawler + OT Envelopes + UNS Wildcards."""
+        """Compile an Ed25519 + HMAC-SHA256-signed offline policy bundle from Champion + Threat Crawler + OT Envelopes + UNS Wildcards."""
         champ = self.engine.store.get_champion("enterprise-balanced")
-        # Gather IOC domains from threat crawler + base malicious C2 domains for Android VpnService
         domains = {
             "c2.red-beacon.invalid",
             "exfil.attacker.invalid",
@@ -258,6 +274,11 @@ class EdgeFleetManager:
         canonical = json.dumps(body, sort_keys=True, separators=(",", ":"))
         digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
         sig = hmac.new(self._secret, digest.encode("utf-8"), hashlib.sha256).hexdigest()
+        ed_sig = ""
+        ed_pub = ""
+        if hasattr(self.engine, "security_authority"):
+            ed_sig = self.engine.security_authority.sign_ed25519(digest.encode("utf-8"))
+            ed_pub = self.engine.security_authority.ed25519_public_key_hex
         return SignedOfflinePolicyBundle(
             bundle_version=f"pol-{digest[:12]}",
             issued_at=issued_at,
@@ -271,6 +292,8 @@ class EdgeFleetManager:
             pinned_birth_schemas=births,
             bundle_sha256=digest,
             signature=sig,
+            ed25519_signature=ed_sig,
+            ed25519_public_key_hex=ed_pub,
         )
 
     def verify_policy_bundle(self, bundle: SignedOfflinePolicyBundle) -> bool:
@@ -287,7 +310,16 @@ class EdgeFleetManager:
         canonical = json.dumps(body, sort_keys=True, separators=(",", ":"))
         digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
         expected_sig = hmac.new(self._secret, digest.encode("utf-8"), hashlib.sha256).hexdigest()
-        return hmac.compare_digest(bundle.bundle_sha256, digest) and hmac.compare_digest(bundle.signature, expected_sig)
+        hmac_ok = hmac.compare_digest(bundle.bundle_sha256, digest) and hmac.compare_digest(bundle.signature, expected_sig)
+        if not hmac_ok:
+            return False
+        if bundle.ed25519_signature and hasattr(self.engine, "security_authority"):
+            return self.engine.security_authority.verify_ed25519(
+                digest.encode("utf-8"),
+                bundle.ed25519_signature,
+                bundle.ed25519_public_key_hex or None,
+            )
+        return True
 
     def status(self) -> dict[str, Any]:
         with self._lock:

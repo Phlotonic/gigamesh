@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -820,6 +820,125 @@ def create_app(config: GigaMeshConfig | None = None, enable_autopilot: bool | No
     @app.post("/api/copilot/ask")
     def copilot_ask(payload: dict[str, Any]) -> dict[str, Any]:
         return engine.soar_copilot.ask_copilot(str(payload.get("question", "")))
+
+    # ------------------------------------------------------------------
+    # Production Auth / Multi-Tenant RBAC / Ed25519 Public Key & PCAP Ingest
+    # ------------------------------------------------------------------
+    @app.post("/api/auth/login")
+    def auth_login(payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return engine.security_authority.authenticate_and_issue_jwt(
+                str(payload.get("username", "")),
+                str(payload.get("password", "")),
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    @app.get("/api/auth/public-key")
+    def auth_public_key() -> dict[str, Any]:
+        return {
+            "algorithm": "Ed25519",
+            "public_key_hex": engine.security_authority.ed25519_public_key_hex,
+            "public_key_pem": engine.security_authority.ed25519_public_key_pem,
+            "production_mode": engine.security_authority.production_mode,
+            "auth_required": engine.security_authority.auth_required,
+        }
+
+    @app.post("/api/auth/users")
+    def auth_create_user(payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return engine.security_authority.create_user(
+                str(payload["username"]),
+                str(payload["password"]),
+                role=str(payload.get("role", "viewer")),
+                tenant_id=str(payload.get("tenant_id", "default")),
+            )
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/ot-dpi/ingest-pcap")
+    async def ot_dpi_ingest_pcap(request: Request) -> dict[str, Any]:
+        from gigamesh.integrations.ot_wire_capture import ingest_pcap_bytes
+
+        raw = await request.body()
+        try:
+            return ingest_pcap_bytes(engine, raw)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # ------------------------------------------------------------------
+    # Kubernetes Health Probes & Prometheus Metrics Exposition
+    # ------------------------------------------------------------------
+    @app.get("/healthz")
+    def healthz() -> dict[str, Any]:
+        return {"status": "ok", "service": "gigamesh"}
+
+    @app.get("/readyz")
+    def readyz() -> dict[str, Any]:
+        db_h = engine.state_store.health()
+        chain = engine.security_audit_log.verify_chain()
+        repo = engine.store.verify_integrity()
+        ok = bool(db_h.get("ok") and chain.get("valid") and repo.get("valid"))
+        if not ok:
+            raise HTTPException(status_code=503, detail={"db": db_h, "audit_chain": chain, "repo": repo})
+        return {"status": "ready", "db": db_h, "audit_chain_valid": True, "neural_repo_valid": True}
+
+    @app.get("/metrics")
+    def prometheus_metrics():
+        from fastapi.responses import PlainTextResponse
+
+        chain = engine.security_audit_log.verify_chain()
+        comp = engine.compliance.evaluate_compliance()
+        lines = [
+            "# HELP gigamesh_events_total Total security events ingested",
+            "# TYPE gigamesh_events_total counter",
+            f"gigamesh_events_total {len(engine.events)}",
+            "# HELP gigamesh_incidents_total Total correlated security incidents",
+            "# TYPE gigamesh_incidents_total gauge",
+            f"gigamesh_incidents_total {len(engine.incidents)}",
+            "# HELP gigamesh_uns_nodes Current Unified Namespace retained nodes",
+            "# TYPE gigamesh_uns_nodes gauge",
+            f"gigamesh_uns_nodes {len(engine.uns.nodes)}",
+            "# HELP gigamesh_ot_commands_blocked_total Total unsafe OT commands blocked",
+            "# TYPE gigamesh_ot_commands_blocked_total counter",
+            f"gigamesh_ot_commands_blocked_total {engine.mqtt_ot.stats['commands_blocked']}",
+            "# HELP gigamesh_sra_active_sessions Active JIT vendor remote access sessions",
+            "# TYPE gigamesh_sra_active_sessions gauge",
+            f"gigamesh_sra_active_sessions {sum(1 for s in engine.sra.sessions.values() if s.status == 'active')}",
+            "# HELP gigamesh_audit_chain_valid SHA-256 hash chain validity (1=valid, 0=tampered)",
+            "# TYPE gigamesh_audit_chain_valid gauge",
+            f"gigamesh_audit_chain_valid {1 if chain.get('valid') else 0}",
+            "# HELP gigamesh_compliance_readiness_pct Overall 5-framework compliance readiness percent",
+            "# TYPE gigamesh_compliance_readiness_pct gauge",
+            f"gigamesh_compliance_readiness_pct {comp['overall_readiness_pct']}",
+        ]
+        return PlainTextResponse("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
+
+    # ------------------------------------------------------------------
+    # Live Socket-Enforced JIT Vendor SRA Bastion WebSocket Tunnel
+    # ------------------------------------------------------------------
+    @app.websocket("/ws/sra/{session_id}")
+    async def ws_sra_bastion(websocket: WebSocket, session_id: str) -> None:
+        sess = engine.sra.sessions.get(session_id)
+        if sess is None or sess.status != "active":
+            await websocket.close(code=4003, reason="SRA session not active")
+            return
+        await websocket.accept()
+        engine.sra.register_live_socket(session_id, websocket)
+        try:
+            await websocket.send_json({"type": "sra_connected", "session_id": session_id, "target": sess.target_uns_asset, "mode": sess.access_mode})
+            while True:
+                data = await websocket.receive_json()
+                cmd = str(data.get("command", ""))
+                entry = engine.sra.record_session_command(session_id, cmd)
+                await websocket.send_json({"type": "sra_verdict", **entry.model_dump(mode="json")})
+                if engine.sra.sessions[session_id].status != "active":
+                    await websocket.close(code=4003, reason="SRA session terminated")
+                    break
+        except WebSocketDisconnect:
+            pass
+        finally:
+            engine.sra.unregister_live_socket(session_id, websocket)
 
     # ------------------------------------------------------------------
     # Live WebSocket Stream

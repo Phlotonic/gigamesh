@@ -40,7 +40,9 @@ from gigamesh.neural_repo.sync_firewall import GenomeSyncFirewall
 from gigamesh.provenance.graph import CausalProvenanceGraph
 from gigamesh.rea.bridge import ReaBridge
 from gigamesh.rea.metabolism import MetabolismCompiler
+from gigamesh.security.auth_rbac import ProductionSecurityAuthority
 from gigamesh.simulator.corpus import AttackScenario, build_attack_scenarios
+from gigamesh.storage.db import GigaMeshStateStore
 
 
 class GigaMeshEngine:
@@ -51,6 +53,19 @@ class GigaMeshEngine:
         self.config.data_dir.mkdir(parents=True, exist_ok=True)
         self.config.artifacts_dir.mkdir(parents=True, exist_ok=True)
 
+        self.state_store = GigaMeshStateStore(
+            db_path=self.config.db_path,
+            database_url=self.config.database_url,
+        )
+        self.security_authority = ProductionSecurityAuthority(
+            keys_dir=self.config.keys_dir,
+            state_store=self.state_store,
+            production_mode=self.config.production_mode,
+            auth_required=self.config.auth_required,
+            jwt_secret=self.config.jwt_secret,
+            oidc_jwks_url=self.config.oidc_jwks_url,
+        )
+
         self.store = GitNeuralStore(self.config.genome_repo_dir)
         self.router = ContextualMoERouter(self.store)
         self.provenance = CausalProvenanceGraph()
@@ -58,7 +73,7 @@ class GigaMeshEngine:
         self.snare = AdaptiveDeceptionSnare(self.config.artifacts_dir)
         self.mcp_proxy = McpPolicyProxy()
         self.circuit_breaker = AgenticCircuitBreaker()
-        self.security_audit_log = HashChainedSecurityAuditLog()
+        self.security_audit_log = HashChainedSecurityAuditLog(state_store=self.state_store)
         self.last_owasp_report: dict[str, Any] | None = None
         self.redhat_ctrl = RedHatHostController()
         self.rea_bridge = ReaBridge(
@@ -77,7 +92,9 @@ class GigaMeshEngine:
         )
 
         self.events: list[AsefEvent] = []
-        self.incidents: dict[str, IncidentCase] = {}
+        self.incidents: dict[str, IncidentCase] = {
+            row["case_id"]: IncidentCase(**row) for row in self.state_store.load_incidents()
+        }
         self.shadow_ab_log: list[dict[str, Any]] = []
         self.scenarios: dict[str, AttackScenario] = {
             s.scenario_id: s for s in build_attack_scenarios()
@@ -309,6 +326,7 @@ class GigaMeshEngine:
                 )
                 control_actions.append(f"redhat_order:{order.order_id}")
 
+            self.state_store.save_incident(incident.case_id, incident.model_dump(mode="json"))
             self.broadcast(
                 "incident_updated",
                 {

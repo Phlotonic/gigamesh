@@ -51,7 +51,23 @@ cd frontend && npm run build && cd ..
 PYTHONPATH=/home/antigravity/gigamesh/backend /home/antigravity/gigamesh/.venv/bin/uvicorn gigamesh.api.server:app --host 0.0.0.0 --port 8000
 ```
 
-### 3. Optional: Attach Live `morluto/rea` (`rea-agents`)
+### 3. Production Deployment (Docker Compose / Kubernetes / Android)
+```bash
+# On-Premise / Factory Stack (GigaMesh + Live Rust MQTT Inline Proxy + Mosquitto + PostgreSQL 16)
+export GIGAMESH_ENV=production GIGAMESH_AUTH_REQUIRED=true
+export GIGAMESH_JWT_SECRET="$(openssl rand -hex 32)"
+export GIGAMESH_OT_SIGNING_SECRET="$(openssl rand -hex 32)"
+export GIGAMESH_EDGE_BUNDLE_SECRET="$(openssl rand -hex 32)"
+docker compose up --build -d
+
+# Kubernetes (Non-Root Deployment + Rust MQTT Proxy Sidecar + HPA + /healthz /readyz /metrics)
+kubectl apply -f deploy/k8s/gigamesh-production.yaml
+
+# Native Android App (.aab with Kotlin VpnService Shield + StrongBox Biometric Quorum)
+./scripts/build_android_release.sh
+```
+
+### 4. Optional: Attach Live `morluto/rea` (`rea-agents`)
 ```bash
 npm install --global rea-agents
 rea doctor

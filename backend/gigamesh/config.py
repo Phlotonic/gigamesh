@@ -121,6 +121,21 @@ class GigaMeshConfig:
     uns_enterprise_name: str = field(
         default_factory=lambda: os.environ.get("GIGAMESH_UNS_ENTERPRISE", "QuanumisCorp")
     )
+    production_mode: bool = field(
+        default_factory=lambda: os.environ.get("GIGAMESH_ENV", "development").strip().lower() == "production"
+    )
+    auth_required: bool = field(
+        default_factory=lambda: os.environ.get("GIGAMESH_AUTH_REQUIRED", "false").strip().lower() in ("1", "true", "yes")
+    )
+    database_url: str | None = field(
+        default_factory=lambda: os.environ.get("GIGAMESH_DATABASE_URL") or None
+    )
+    jwt_secret: str | None = field(
+        default_factory=lambda: os.environ.get("GIGAMESH_JWT_SECRET") or None
+    )
+    oidc_jwks_url: str | None = field(
+        default_factory=lambda: os.environ.get("GIGAMESH_OIDC_JWKS_URL") or None
+    )
 
     @property
     def genome_repo_dir(self) -> Path:
@@ -129,6 +144,10 @@ class GigaMeshConfig:
     @property
     def data_dir(self) -> Path:
         return self.base_dir / "data"
+
+    @property
+    def keys_dir(self) -> Path:
+        return self.data_dir / "keys"
 
     @property
     def sync_quarantine_dir(self) -> Path:

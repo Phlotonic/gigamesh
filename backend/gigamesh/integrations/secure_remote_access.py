@@ -78,12 +78,31 @@ FORBIDDEN_VENDOR_PATTERNS = (
 
 
 class SecureRemoteAccessBroker:
-    """Zero-Trust Just-in-Time (JIT) OT/IT vendor remote access with hash-chained session recording."""
+    """Zero-Trust Just-in-Time (JIT) OT/IT vendor remote access with durable hash-chained recording & live socket kill-switch."""
 
     def __init__(self, *, engine: GigaMeshEngine) -> None:
         self.engine = engine
         self._lock = threading.RLock()
         self.sessions: dict[str, SraSessionRecord] = {}
+        self._live_sockets: dict[str, list[Any]] = {}
+        if hasattr(self.engine, "state_store"):
+            for row in self.engine.state_store.load_sra_sessions():
+                rec = SraSessionRecord(**row)
+                self.sessions[rec.session_id] = rec
+
+    def _persist(self, rec: SraSessionRecord) -> None:
+        if hasattr(self.engine, "state_store"):
+            self.engine.state_store.save_sra_session(rec.session_id, rec.model_dump(mode="json"))
+
+    def register_live_socket(self, session_id: str, ws: Any) -> None:
+        with self._lock:
+            self._live_sockets.setdefault(session_id, []).append(ws)
+
+    def unregister_live_socket(self, session_id: str, ws: Any) -> None:
+        with self._lock:
+            lst = self._live_sockets.get(session_id, [])
+            if ws in lst:
+                lst.remove(ws)
 
     def request_jit_session(self, req: SraSessionRequest) -> SraSessionRecord:
         duration = max(5, min(240, req.duration_minutes))
@@ -111,6 +130,7 @@ class SecureRemoteAccessBroker:
         )
         with self._lock:
             self.sessions[rec.session_id] = rec
+        self._persist(rec)
         self._publish_uns(rec, "requested")
         return rec
 
@@ -125,6 +145,7 @@ class SecureRemoteAccessBroker:
             rec.status = "active"
             rec.activated_at = now
             rec.expires_at = now + timedelta(minutes=rec.duration_minutes)
+        self._persist(rec)
         self.engine.security_audit_log.record(
             category="owasp_block",
             severity="medium",
@@ -178,6 +199,7 @@ class SecureRemoteAccessBroker:
                 entry_hash=entry_hash,
             )
             rec.transcript.append(entry)
+        self._persist(rec)
 
         if not allowed:
             self.engine.security_audit_log.record(
@@ -190,19 +212,30 @@ class SecureRemoteAccessBroker:
         return entry
 
     def kill_session(self, session_id: str, killed_by: str = "soc-operator") -> SraSessionRecord:
-        """1-Click Instant Kill-Switch severing vendor remote access immediately."""
+        """1-Click Instant Kill-Switch severing vendor remote access & live sockets immediately."""
+        import asyncio
+
         with self._lock:
             rec = self.sessions.get(session_id)
             if rec is None:
                 raise KeyError(session_id)
             rec.status = "killed"
             rec.killed_by = killed_by
+            sockets = list(self._live_sockets.get(session_id, []))
+        self._persist(rec)
+        # Actively close any live WebSocket bastion tunnels bound to this session
+        for ws in sockets:
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(ws.close(code=4003, reason="SRA 1-Click Kill-Switch"))
+            except RuntimeError:
+                pass
         self.engine.security_audit_log.record(
             category="access_denied",
             severity="high",
             actor=killed_by,
             summary=f"1-Click Kill-Switch terminated JIT SRA session {session_id} ({rec.vendor_name})",
-            details={"target": rec.target_uns_asset},
+            details={"target": rec.target_uns_asset, "severed_sockets": len(sockets)},
         )
         self._publish_uns(rec, "killed")
         return rec

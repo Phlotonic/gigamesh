@@ -1,0 +1,149 @@
+# GigaMesh Production Kubernetes Manifests (Control Plane + Rust Inline MQTT Proxy Sidecar + NetworkPolicy + HPA)
+# Copyright (C) 2026 Adam Dryden and Quanumis Systems. Licensed AGPL-3.0-or-later OR Commercial.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gigamesh-control-plane
+  namespace: gigamesh
+  labels:
+    app: gigamesh
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gigamesh
+  template:
+    metadata:
+      labels:
+        app: gigamesh
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8000"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: gigamesh-api
+          image: ghcr.io/phlotonic/gigamesh:latest
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: GIGAMESH_ENV
+              value: "production"
+            - name: GIGAMESH_AUTH_REQUIRED
+              value: "true"
+            - name: GIGAMESH_UNS_ENTERPRISE
+              value: "QuanumisCorp"
+            - name: GIGAMESH_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: gigamesh-secrets
+                  key: database-url
+            - name: GIGAMESH_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: gigamesh-secrets
+                  key: jwt-secret
+            - name: GIGAMESH_OT_SIGNING_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: gigamesh-secrets
+                  key: ot-signing-secret
+            - name: GIGAMESH_EDGE_BUNDLE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: gigamesh-secrets
+                  key: edge-bundle-secret
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+        - name: gigamesh-edge-mqtt-proxy
+          image: ghcr.io/phlotonic/gigamesh:latest
+          command:
+            - /usr/local/bin/gigamesh-edge
+            - --proxy
+            - --listen
+            - 0.0.0.0:1883
+            - --upstream
+            - mosquitto.gigamesh.svc.cluster.local:1883
+          ports:
+            - containerPort: 1883
+              name: mqtt-proxy
+          env:
+            - name: GIGAMESH_EDGE_BUNDLE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: gigamesh-secrets
+                  key: edge-bundle-secret
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "250m"
+              memory: "128Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gigamesh-service
+  namespace: gigamesh
+spec:
+  selector:
+    app: gigamesh
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8000
+    - name: mqtt-proxy
+      port: 1883
+      targetPort: 1883
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: gigamesh-hpa
+  namespace: gigamesh
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: gigamesh-control-plane
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

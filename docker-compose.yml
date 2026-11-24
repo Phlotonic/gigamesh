@@ -12,37 +12,56 @@ services:
       - "8000:8000"
     environment:
       GIGAMESH_ALLOWED_ORIGINS: "http://localhost:8000,http://127.0.0.1:8000"
-      GIGAMESH_MQTT_HOST: "mosquitto"
+      GIGAMESH_MQTT_HOST: "gigamesh-edge-proxy"
       GIGAMESH_MQTT_PORT: "1883"
       AWS_REGION: "${AWS_REGION:-us-east-1}"
-      # Set GIGAMESH_API_KEY in .env for production bearer-token enforcement
+      GIGAMESH_ENV: "${GIGAMESH_ENV:-development}"
+      GIGAMESH_AUTH_REQUIRED: "${GIGAMESH_AUTH_REQUIRED:-false}"
+      GIGAMESH_JWT_SECRET: "${GIGAMESH_JWT_SECRET:-}"
       GIGAMESH_API_KEY: "${GIGAMESH_API_KEY:-}"
       GIGAMESH_OT_SIGNING_SECRET: "${GIGAMESH_OT_SIGNING_SECRET:-change-me-in-production}"
       GIGAMESH_EDGE_BUNDLE_SECRET: "${GIGAMESH_EDGE_BUNDLE_SECRET:-change-me-in-production}"
-      DATABASE_URL: "postgresql://gigamesh:${POSTGRES_PASSWORD:-gigamesh-dev-only}@postgres:5432/gigamesh"
+      GIGAMESH_DATABASE_URL: "postgresql://gigamesh:${POSTGRES_PASSWORD:-gigamesh-dev-only}@postgres:5432/gigamesh"
     volumes:
       - gigamesh_data:/app/data
       - gigamesh_genome:/app/genome_repo
     depends_on:
       postgres:
         condition: service_healthy
-      mosquitto:
+      gigamesh-edge-proxy:
         condition: service_started
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/overview', timeout=3)"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=3)"]
       interval: 20s
       timeout: 5s
       retries: 3
+
+  gigamesh-edge-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gigamesh-rust-mqtt-proxy
+    restart: unless-stopped
+    command: ["/usr/local/bin/gigamesh-edge", "--proxy", "--listen", "0.0.0.0:1883", "--upstream", "mosquitto:1883"]
+    ports:
+      - "1883:1883"
+    environment:
+      GIGAMESH_EDGE_BUNDLE_SECRET: "${GIGAMESH_EDGE_BUNDLE_SECRET:-change-me-in-production}"
+    depends_on:
+      - mosquitto
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
 
   mosquitto:
     image: eclipse-mosquitto:2.0
     container_name: gigamesh-mqtt-broker
     restart: unless-stopped
-    ports:
-      - "1883:1883"
-      - "8883:8883"
+    expose:
+      - "1883"
+      - "8883"
     volumes:
       - ./deploy/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mosquitto_data:/mosquitto/data

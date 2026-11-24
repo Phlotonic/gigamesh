@@ -141,21 +141,71 @@ class SecurityHardeningMiddleware(BaseHTTPMiddleware):
                 resp = JSONResponse({"error": "payload_too_large"}, status_code=413)
                 return self._apply_security_headers(resp, path, self.limiter.limit, remaining)
 
-        # 3. Optional constant-time API key auth on mutating API routes when configured (A07)
+        # 3. Authentication & Multi-Tenant RBAC Enforcement (A01/A07)
         configured_key = self.engine.config.api_auth_key
-        if configured_key and path.startswith("/api/") and request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        auth_required = hasattr(self.engine, "security_authority") and self.engine.security_authority.auth_required
+        is_public_route = path in ("/healthz", "/readyz", "/metrics", "/api/auth/login", "/api/auth/public-key")
+
+        if path.startswith("/api/") and not is_public_route:
             auth_hdr = request.headers.get("authorization", "")
             bearer = auth_hdr[7:].strip() if auth_hdr.lower().startswith("bearer ") else ""
-            provided = request.headers.get("x-gigamesh-api-key", "").strip() or bearer
-            if not provided or not hmac.compare_digest(provided, configured_key):
-                self.engine.security_audit_log.record(
-                    category="auth_failure",
-                    severity="high",
-                    actor=client_host,
-                    summary=f"Rejected unauthenticated {request.method} {path}",
-                )
-                resp = JSONResponse({"error": "unauthorized"}, status_code=401)
-                return self._apply_security_headers(resp, path, self.limiter.limit, remaining)
+            api_key_hdr = request.headers.get("x-gigamesh-api-key", "").strip()
+
+            # 3a. Legacy static API key on mutating routes (backward compatible)
+            if configured_key and request.method in ("POST", "PUT", "PATCH", "DELETE"):
+                provided = api_key_hdr or bearer
+                if not provided or not hmac.compare_digest(provided, configured_key):
+                    # Fall through to JWT check if bearer looks like a JWT (3 dot-separated parts)
+                    if not (bearer and bearer.count(".") == 2 and hasattr(self.engine, "security_authority")):
+                        self.engine.security_audit_log.record(
+                            category="auth_failure",
+                            severity="high",
+                            actor=client_host,
+                            summary=f"Rejected unauthenticated {request.method} {path}",
+                        )
+                        resp = JSONResponse({"error": "unauthorized"}, status_code=401)
+                        return self._apply_security_headers(resp, path, self.limiter.limit, remaining)
+
+            # 3b. Production JWT + Least-Privilege RBAC Enforcement
+            if hasattr(self.engine, "security_authority") and (auth_required or (bearer and bearer.count(".") == 2)):
+                from gigamesh.security.auth_rbac import required_role_for_route
+
+                if not bearer:
+                    self.engine.security_audit_log.record(
+                        category="auth_failure",
+                        severity="high",
+                        actor=client_host,
+                        summary=f"Missing Bearer JWT on protected route {request.method} {path}",
+                    )
+                    resp = JSONResponse({"error": "unauthorized", "detail": "Bearer JWT required"}, status_code=401)
+                    return self._apply_security_headers(resp, path, self.limiter.limit, remaining)
+                try:
+                    claims = self.engine.security_authority.verify_jwt(bearer)
+                except PermissionError:
+                    self.engine.security_audit_log.record(
+                        category="auth_failure",
+                        severity="high",
+                        actor=client_host,
+                        summary=f"Invalid/expired Bearer JWT on {request.method} {path}",
+                    )
+                    resp = JSONResponse({"error": "unauthorized", "detail": "Invalid or expired JWT"}, status_code=401)
+                    return self._apply_security_headers(resp, path, self.limiter.limit, remaining)
+
+                req_role = required_role_for_route(request.method, path)
+                actual_role = str(claims.get("role", "viewer"))
+                if not self.engine.security_authority.role_allows(actual_role, req_role):
+                    self.engine.security_audit_log.record(
+                        category="access_denied",
+                        severity="high",
+                        actor=str(claims.get("sub", client_host)),
+                        summary=f"RBAC denied {actual_role} on {request.method} {path} (requires {req_role})",
+                    )
+                    resp = JSONResponse(
+                        {"error": "forbidden", "required_role": req_role, "actual_role": actual_role},
+                        status_code=403,
+                    )
+                    return self._apply_security_headers(resp, path, self.limiter.limit, remaining)
+                request.state.user = claims
 
         # 4. Execute route with fail-closed sanitized error boundary (A10)
         try:
