@@ -25,30 +25,33 @@ Every defensive option is exhaustively benchmarked across multi-attacker and ben
 | **Threat Intel Web Crawler** | `backend/gigamesh/integrations/threat_crawler.py` | Toggle-able, SSRF-hardened 10-feed multi-region threat crawler (GHSA, NIST NVD, CISA KEV, Red Hat, ENISA EUVD, CERT-EU, UK NCSC, JPCERT/CC, Canada CCCS, SANS ISC) with HTTP `304`/ETag delta sync and per-record poison quarantine. |
 | **OWASP Triple-Framework Defense** | `backend/gigamesh/benchmarks/owasp_benchmark.py` + `detectors/owasp_agentic_guard.py` | Live 30-category benchmark covering OWASP Agentic AI 2026 (`ASI01`–`ASI10`), LLM 2025 (`LLM01`–`LLM10`), and Web 2025 (`A01`–`A10`) achieving **30/30 (100%) with 0% benign false positives**, backed by an Agentic Circuit Breaker and Hash-Chained Security Audit Log. |
 | **Security-First Unified Namespace (S-UNS)** | `backend/gigamesh/integrations/uns.py` | Canonical ISA-95 (`<Enterprise>/<Site>/<Area>/<Line>/<Cell>/<Asset>/<Layer>/<Metric>`) + Sparkplug B dual-mode hub with monotonic MQTT `+`/`#` wildcard policy inheritance, versioned **UNS Data Contracts** (schema validation), **1-click Site Read-Only Lockdown**, and live **UNS Security Digital Twin** publishing (`.../Security/GigaMesh/...`). |
-| **Industrial MQTT 5.0 / Ignition & Rust Edge** | `backend/gigamesh/integrations/mqtt_ot_middleware.py` + `edge/rust/src/main.rs` | Drop-in Ignition / Cirrus Link middleware (fail-open telemetry + Birth-Certificate SHA-256 pinning; fail-closed E2E signed `NCMD`/`DCMD` + Digital Physics Envelopes + Ghost PLC snare) plus a **372 KB GC-free Rust edge binary** (`232k+ msg/sec` mixed Sparkplug B + ISA-95 UNS) and HMAC-signed offline policy bundles for Android/ARM64 edge nodes. |
-| **Passive Multi-Protocol OT DPI & Purdue 0–5** | `backend/gigamesh/integrations/ot_dpi_inventory.py` | Passive L7 DPI across **Modbus/TCP, OPC-UA, Siemens S7comm, DNP3, EtherNet/IP, BACnet/IP, IEC 60870-5-104 & Sparkplug B**, Purdue 0–5 inventory, CVSS×EPSS×KEV exploitability scoring with virtual-patching risk reduction, Visibility Gap detection, and dry-run-tested zone segmentation. |
-| **Zero-Trust JIT Vendor SRA** | `backend/gigamesh/integrations/secure_remote_access.py` | Eliminates standing vendor VPNs with Quorum-gated, time-boxed, single-asset Just-in-Time sessions, cryptographically hash-chained command transcripts, and a **1-click Instant Kill-Switch**. |
+| **Industrial MQTT 5.0 / Ignition & Rust Edge Proxy** | `backend/gigamesh/integrations/mqtt_ot_middleware.py` + `edge/rust/src/main.rs` | Drop-in Ignition / Cirrus Link middleware (fail-open telemetry + Birth-Certificate SHA-256 pinning; fail-closed E2E signed `NCMD`/`DCMD` + Digital Physics Envelopes + Ghost PLC snare) plus a **441 KB GC-free Rust edge binary** featuring a live wire-level **TCP MQTT 3.1.1/5.0 inline proxy (`--proxy`)** and **Ed25519 + HMAC-SHA256** signed offline policy bundles for Android/ARM64 edge nodes. |
+| **Passive Multi-Protocol OT DPI & Binary PCAP** | `backend/gigamesh/integrations/ot_dpi_inventory.py` + `ot_wire_capture.py` | Passive L7 DPI and binary wire decoders across **Modbus/TCP, OPC-UA, Siemens S7comm, DNP3, EtherNet/IP, BACnet/IP, IEC 60870-5-104 & Sparkplug B** (including direct `.pcap` SPAN-port ingestion), Purdue 0–5 inventory, CVSS×EPSS×KEV exploitability scoring with virtual-patching risk reduction, Visibility Gap detection, and dry-run-tested zone segmentation. |
+| **Zero-Trust JIT Vendor SRA Bastion** | `backend/gigamesh/integrations/secure_remote_access.py` | Eliminates standing vendor VPNs with Quorum-gated, time-boxed, single-asset Just-in-Time sessions, a live socket-enforced **WebSocket bastion (`/ws/sra/{session_id}`)**, cryptographically hash-chained command transcripts, and a **1-click Instant Kill-Switch**. |
 | **Inline AI Gateway, AI-SPM & Red-Team** | `backend/gigamesh/integrations/ai_gateway_spm.py` | Sub-millisecond inline prompt/response/tool **DSPM PII & Secret Scrubber**, Shadow-AI detection & blocking, and **1-click 6-vector Automated Red-Teaming** across Bedrock, OpenAI, Anthropic, Gemini, and local vLLM. |
 | **Official AWS Agent Toolkit Bridge** | `backend/gigamesh/integrations/aws_toolkit.py` + `.mcp.json` | Streamable-HTTP MCP bridge to `https://aws-mcp.us-east-1.api.aws/mcp` with SHA-256 MCP tool pinning, read-only default remediation (`aws-security` Rules 1/4/5/9), and automatic UNS Cloud projection. |
 | **5-Framework Compliance, MITRE, OCSF & Sigma** | `backend/gigamesh/integrations/compliance_suite.py` | Continuous automated compliance evidence across **IEC 62443, NIST SP 800-82r3, NERC CIP (CIP-005/015), NIST CSF 2.0, and EU NIS2/CRA**, live **MITRE Triple-Matrix** (Enterprise + ICS + ATLAS), **OCSF v1.3** event exporter, and **Sigma Detection-as-Code** compiler. |
 | **Air-Gapped Copilot & SOAR Rollback** | `backend/gigamesh/integrations/soar_copilot.py` | Local deterministic **"Ask GigaMesh"** plain-English assistant (zero external LLM, zero hallucination) plus declarative SOAR playbooks supporting **Dry-Run preview** and **1-click Safe Rollback**. |
+| **Durable Storage & Security Authority** | `backend/gigamesh/storage/db.py` + `security/auth_rbac.py` | Dual-engine **PostgreSQL 16 / SQLite WAL** persistence preserving UNS state, incidents, edge devices, SRA transcripts, and unbroken SHA-256 audit chains across restarts; **Ed25519 asymmetric keypairs**, multi-tenant **JWT RBAC** (`viewer` → `super_admin`), and fail-closed `GIGAMESH_ENV=production` secret guards. |
+| **Observability, Android & CI/CD** | `.github/workflows/ci-cd.yml` + `deploy/k8s/` + `frontend/android-native/` | Kubernetes `/healthz` & `/readyz` probes, Prometheus `/metrics` exposition, automated GitHub Actions CI/CD (`cargo test` + 52 `pytest` checks + PWA build + Docker image build), and native Android Capacitor/Kotlin VPN Shield + StrongBox Biometric Quorum build pipeline. |
 
 ---
 
 ## Quickstart
 
-### 1. Run the Test Suite
+### 1. Run the Test Suite (52 Backend/Integration + Rust Edge Tests)
 ```bash
-PYTHONPATH=/home/antigravity/gigamesh/backend /home/antigravity/gigamesh/.venv/bin/pytest -v backend/tests
+PYTHONPATH=backend .venv/bin/pytest -v backend/tests
+cargo test --manifest-path edge/rust/Cargo.toml
 ```
 
 ### 2. Run the Backend API & Live SOC Command Center
 ```bash
-# Build frontend
-cd frontend && npm run build && cd ..
+# Build frontend (Novice-first default + Expert SOC toggle + Ignition /embed/hmi)
+cd frontend && npm ci && npm run build && cd ..
 
-# Launch GigaMesh (serves both REST/WebSocket API and built SOC UI on port 8000)
-PYTHONPATH=/home/antigravity/gigamesh/backend /home/antigravity/gigamesh/.venv/bin/uvicorn gigamesh.api.server:app --host 0.0.0.0 --port 8000
+# Launch GigaMesh (serves REST/WebSocket API, /healthz, /readyz, /metrics & UI on port 8000)
+PYTHONPATH=backend .venv/bin/uvicorn gigamesh.api.server:app --host 0.0.0.0 --port 8000
 ```
 
 ### 3. Production Deployment (Docker Compose / Kubernetes / Android)
